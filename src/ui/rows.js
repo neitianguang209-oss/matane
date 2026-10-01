@@ -41,7 +41,7 @@ function WishMeta({ w, t, snap, today, compact = false }) {
   else if (!w.doneAt && w.until && t.group !== 'expired') parts.push(html`<span class="badge" key="un">〜${fmtDate(w.until, { weekday: false })}</span>`);
   if (t.group === 'expired') parts.push(html`<span class="badge" key="ex">${fmtDate(w.until, { weekday: false })}で終了</span>`);
   if (!w.doneAt && t.group === 'later') parts.push(html`<${SeasonBadge} key="s" id=${t.next} />`);
-  if (w.area && !compact) parts.push(html`<span key="a" class="row" style=${{ gap: '2px' }}><${Icon} name="mapPin" size=${12} />${w.area}</span>`);
+  if ((w.place?.name || w.area) && !compact) parts.push(html`<span key="a" class="row" style=${{ gap: '2px' }}><${Icon} name="mapPin" size=${12} />${w.place?.name || w.area}</span>`);
   return parts;
 }
 

@@ -3,11 +3,14 @@ import { back, go } from '../lib/router.js';
 import { saveItem, deleteItem } from '../lib/store.js';
 import { SEASONS, todayStr, addDays, seasonOfDate } from '../lib/dates.js';
 import { guessEmoji, EMOJI_CHOICES } from '../lib/emoji.js';
+import { suggestPlaces, mapUrlFor, biasFrom } from '../lib/places.js';
 import { useRoom } from './hooks.js';
 import { Icon } from './icons.js';
 import { Seg, Sheet, TopBar, toast, confirmDialog } from './components.js';
+import { fold } from './WishTab.js';
+import { wishEmoji } from './rows.js';
 
-const { useState, useMemo } = React;
+const { useState, useMemo, useEffect, useRef } = React;
 
 export function WishEditor({ roomId, id, query }) {
   const { snap } = useRoom(roomId);
@@ -15,7 +18,7 @@ export function WishEditor({ roomId, id, query }) {
   const [w, setW] = useState(() => orig ? { ...orig } : {
     type: query?.type === 'do' ? 'do' : 'go',
     title: query?.title ?? '',
-    area: '', url: '', memo: '', seasons: [], until: '', emoji: '',
+    area: '', place: null, url: '', memo: '', seasons: [], until: '', emoji: '',
   });
   const [emojiOpen, setEmojiOpen] = useState(false);
   const set = (patch) => setW((cur) => ({ ...cur, ...patch }));
@@ -23,9 +26,15 @@ export function WishEditor({ roomId, id, query }) {
   const emoji = w.emoji || autoEmoji;
   const ok = w.title.trim().length > 0;
   const urlOk = !w.url || /^https?:\/\//i.test(w.url.trim());
+  // もう同じようなものが入っていないか（ふたりで同じものを足さないように）
+  const similar = useMemo(() => {
+    const t = fold(w.title);
+    if (t.length < 3) return null;
+    return snap.wishes.find((x) => x.id !== orig?.id && (() => { const f = fold(x.title); return f === t || (f.length >= 3 && (f.includes(t) || t.includes(f))); })()) ?? null;
+  }, [w.title, snap.wishes]);
 
   if (id && !orig) {
-    return html`<div class="page no-nav"><${TopBar} title="いつか" onBack=${() => back(`/r/${roomId}/wish`)} />
+    return html`<div class="page no-nav"><${TopBar} title="やりたいこと" onBack=${() => back(`/r/${roomId}/wish`)} />
       <div class="empty"><div class="e">🫥</div><div class="t">見つかりませんでした</div></div></div>`;
   }
 
@@ -49,6 +58,7 @@ export function WishEditor({ roomId, id, query }) {
       type: w.type,
       title: w.title.trim(),
       area: w.area?.trim() || null,
+      place: w.place ?? null,
       url: w.url?.trim() || null,
       memo: w.memo?.trim() || null,
       seasons: SEASONS.map((s) => s.id).filter((s) => (w.seasons ?? []).includes(s)),
@@ -71,17 +81,27 @@ export function WishEditor({ roomId, id, query }) {
   const today = todayStr();
   const cur = seasonOfDate(today);
   return html`<div class="page no-nav">
-    <${TopBar} title=${orig ? '編集' : 'いつかを追加'} onBack=${() => back(`/r/${roomId}/wish`)} />
+    <${TopBar} title=${orig ? '編集' : '行きたい・やりたいを追加'} onBack=${() => back(`/r/${roomId}/wish`)} />
     <div class="stack" style=${{ gap: '18px' }}>
       <${Seg} big=${true} value=${w.type} onChange=${(v) => set({ type: v })} label="種類"
         options=${[{ value: 'go', label: '📍 行きたいところ' }, { value: 'do', label: '✨ やりたいこと' }]} />
 
-      <div class="row" style=${{ alignItems: 'stretch' }}>
-        <button class="emoji-btn" type="button" aria-label="絵文字を選ぶ" onClick=${() => setEmojiOpen(true)}>${emoji}</button>
-        <input class="input title-input grow" autoFocus=${!orig} value=${w.title} aria-label="タイトル"
-          placeholder=${w.type === 'go' ? '例）鎌倉のしらす丼のお店' : '例）ボウリングで100点こえる'}
-          onInput=${(e) => set({ title: e.target.value })} />
+      <div class="stack tight">
+        <div class="row" style=${{ alignItems: 'stretch' }}>
+          <button class="emoji-btn" type="button" aria-label="絵文字を選ぶ" onClick=${() => setEmojiOpen(true)}>${emoji}</button>
+          <input class="input title-input grow" autoFocus=${!orig} value=${w.title} aria-label="タイトル"
+            placeholder=${w.type === 'go' ? '例）高尾山、鎌倉のしらす丼' : '例）ボウリングで100点こえる'}
+            onInput=${(e) => set({ title: e.target.value })} />
+        </div>
+        ${similar ? html`<div class="note accent" style=${{ fontSize: '12.5px' }}>
+          <${Icon} name="info" size=${18} />
+          <div class="grow">似たものがもうあります：<b>${wishEmoji(similar)} ${similar.title}</b>（${snap.memberById.get(similar.createdBy)?.name ?? ''}が追加）<br />
+            ${similar.createdBy !== snap.me ? '同じ気持ちなら、そちらに ☆ を押すと「ふたりとも」になります。' : ''}
+            <button class="link-btn" onClick=${() => go(`/r/${roomId}/w/${similar.id}`)}>そちらを見る</button></div>
+        </div>` : null}
       </div>
+
+      <${PlaceField} w=${w} set=${set} bias=${biasFrom(snap.wishes)} />
 
       <div class="field">
         <span class="label">いつやりたい？ <span class="opt">選ばなければ「いつでも」</span></span>
@@ -109,11 +129,6 @@ export function WishEditor({ roomId, id, query }) {
       </div>
 
       <div class="field">
-        <label for="area">場所・エリア <span class="opt">任意</span></label>
-        <input id="area" class="input" value=${w.area ?? ''} placeholder="例）鎌倉、下北沢のあたり" onInput=${(e) => set({ area: e.target.value })} />
-      </div>
-
-      <div class="field">
         <label for="url">リンク <span class="opt">お店のページ・インスタ・Googleマップなど</span></label>
         <div class="row">
           <input id="url" class="input grow" type="url" inputmode="url" value=${w.url ?? ''} placeholder="https://…" onInput=${(e) => set({ url: e.target.value })} />
@@ -127,7 +142,7 @@ export function WishEditor({ roomId, id, query }) {
         <textarea id="memo" class="input" rows="3" value=${w.memo ?? ''} placeholder="予約が必要、平日がすいてる、など" onInput=${(e) => set({ memo: e.target.value })}></textarea>
       </div>
 
-      ${orig ? html`<button class="btn ghost danger block" onClick=${remove}><${Icon} name="trash" />このいつかを消す</button>` : null}
+      ${orig ? html`<button class="btn ghost danger block" onClick=${remove}><${Icon} name="trash" />これを消す</button>` : null}
     </div>
 
     <div class="bottom-bar"><div class="inner">
@@ -141,6 +156,59 @@ export function WishEditor({ roomId, id, query }) {
       </div>
       <button class="btn ghost block small" style=${{ marginTop: '12px' }} onClick=${() => { set({ emoji: '' }); setEmojiOpen(false); }}>タイトルから自動で決める（${autoEmoji}）</button>
     <//>
+  </div>`;
+}
+
+// ---------------------------------------------------------------------
+// 場所：タイトル（か、ここに打った言葉）から候補を出して、タップで決める
+// ---------------------------------------------------------------------
+function PlaceField({ w, set, bias }) {
+  const [list, setList] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [typing, setTyping] = useState(false);   // 場所の欄に自分で打っている
+  const ctrl = useRef(null);
+  const source = (typing ? w.area : w.title)?.trim() ?? '';
+
+  useEffect(() => {
+    if (w.place || source.length < 2) { setList([]); setBusy(false); return; }
+    const t = setTimeout(async () => {
+      ctrl.current?.abort();
+      const c = new AbortController();
+      ctrl.current = c;
+      setBusy(true);
+      try {
+        const res = await suggestPlaces(source, c.signal, bias);
+        if (!c.signal.aborted) setList(res);
+      } catch { if (!c.signal.aborted) setList([]); }
+      finally { if (!c.signal.aborted) setBusy(false); }
+    }, 700);
+    return () => { clearTimeout(t); ctrl.current?.abort(); };
+  }, [source, !!w.place]);
+
+  if (w.place) {
+    return html`<div class="field">
+      <span class="label">場所</span>
+      <div class="place-card">
+        <span class="pin"><${Icon} name="mapPin" size=${20} /></span>
+        <div class="grow">
+          <div class="bold">${w.place.name}</div>
+          <div class="tiny muted">${[w.place.kind, w.place.where].filter(Boolean).join('・')}</div>
+        </div>
+        <a class="icon-btn" href=${mapUrlFor(w)} target="_blank" rel="noopener noreferrer" aria-label="地図で見る"><${Icon} name="external" size=${18} /></a>
+        <button class="icon-btn" type="button" aria-label="場所を外す" onClick=${() => { set({ place: null, area: '' }); setTyping(false); }}><${Icon} name="close" size=${18} /></button>
+      </div>
+    </div>`;
+  }
+  return html`<div class="field">
+    <label for="area">場所・エリア <span class="opt">任意・候補をタップで決まります</span></label>
+    <input id="area" class="input" value=${w.area ?? ''} placeholder="例）鎌倉、下北沢のあたり"
+      onInput=${(e) => { set({ area: e.target.value }); setTyping(!!e.target.value.trim()); }} />
+    ${busy || list.length ? html`<div class="place-sugs" aria-live="polite">
+      <span class="tiny faint" style=${{ width: '100%' }}>${busy && !list.length ? '場所をさがしています…' : `「${source}」の場所の候補`}</span>
+      ${list.map((p, i) => html`<button key=${i} type="button" class="place-sug" onClick=${() => set({ place: { name: p.name, where: p.where, kind: p.kind, lat: p.lat, lon: p.lon }, area: [p.name, p.where].filter(Boolean).join('（') + (p.where ? '）' : '') })}>
+        <${Icon} name="mapPin" size=${14} /><span class="n">${p.name}</span>${p.where || p.kind ? html`<span class="w">${[p.kind, p.where].filter(Boolean).join('・')}</span>` : null}
+      </button>`)}
+    </div>` : null}
   </div>`;
 }
 

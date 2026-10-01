@@ -1,11 +1,10 @@
 import { html, React } from '../lib/html.js';
-import { go } from '../lib/router.js';
 import { seasonOfDate, seasonById } from '../lib/dates.js';
 import { groupWishes } from '../lib/logic.js';
 import { useToday } from './hooks.js';
 import { Icon } from './icons.js';
-import { Seg, TopBar } from './components.js';
-import { WishRow } from './rows.js';
+import { TopBar } from './components.js';
+import { WishRow, KINDS, isNewFromOther } from './rows.js';
 
 const { useState } = React;
 
@@ -16,9 +15,14 @@ export function fold(s) {
     .replace(/[\s　]+/g, '');
 }
 
+// いま見ている種類（タブを行き来しても覚えておく。右下の「追加」もこれに合わせる）
+let lastType = 'go';
+export const listType = () => lastType;
+
 export function WishTab({ snap, headerRight }) {
   const today = useToday();
-  const [kind, setKind] = useState('all');
+  const [type, setTypeState] = useState(lastType);
+  const setType = (t) => { lastType = t; setTypeState(t); };
   const [bothOnly, setBothOnly] = useState(false);
   const [q, setQ] = useState('');
   const [openDone, setOpenDone] = useState(false);
@@ -26,12 +30,15 @@ export function WishTab({ snap, headerRight }) {
   const season = seasonById(seasonOfDate(today));
 
   const fq = fold(q);
-  const filtered = snap.wishes.filter((w) =>
-    (kind === 'all' || w.type === kind) &&
-    (!fq || fold([w.title, w.area, w.memo].join(' ')).includes(fq)));
+  const matches = (w) => !fq || fold([w.title, w.area, w.place?.name, w.memo].join(' ')).includes(fq);
+  const count = (t) => snap.wishes.filter((w) => w.type === t && !w.doneAt).length;
+  const hits = (t) => snap.wishes.filter((w) => w.type === t && matches(w)).length;
+  const newIn = (t) => snap.wishes.some((w) => w.type === t && isNewFromOther(w, snap));
+  const filtered = snap.wishes.filter((w) => w.type === type && matches(w));
   const groups = groupWishes(filtered, { likes: snap.likes, memberCount: snap.members.length, today });
   const pick = (list) => (bothOnly ? list.filter((x) => x.both) : list);
   const active = groups.now.length + groups.anytime.length + groups.later.length;
+  const otherType = type === 'go' ? 'do' : 'go';
 
   const section = (title, aside, list) => list.length ? html`
     <div class="group-head"><span class="t">${title}</span><span class="n">${list.length}</span>${aside ? html`<span class="tiny faint">${aside}</span>` : null}<span class="line"></span></div>
@@ -44,26 +51,34 @@ export function WishTab({ snap, headerRight }) {
     ${open ? html`<div class="list">${list.map(({ w }) => html`<${WishRow} key=${w.id} snap=${snap} w=${w} today=${today} faded=${faded} />`)}</div>` : null}` : null;
 
   return html`<div>
-    <${TopBar} title="いつか" sub="行きたいところ・やりたいこと">${headerRight}<//>
+    <${TopBar} title="やりたいことリスト" sub="行きたいところ・やりたいこと">${headerRight}<//>
 
-    <div class="input-wrap">
-      <${Icon} name="search" />
-      <input class="input" type="search" placeholder="さがす（店名・場所・メモ）" value=${q} onInput=${(e) => setQ(e.target.value)} aria-label="さがす" />
-      ${q ? html`<button class="clear" aria-label="消す" onClick=${() => setQ('')}><${Icon} name="close" size=${18} /></button>` : null}
+    <div class="type-tabs" role="tablist" aria-label="種類">
+      ${['go', 'do'].map((t) => html`<button key=${t} role="tab" aria-selected=${type === t} class=${'type-tab ' + t + (type === t ? ' on' : '')} onClick=${() => setType(t)}>
+        <span class="e">${KINDS[t].emoji}</span>
+        <span class="grow"><span class="l">${KINDS[t].long}</span><span class="c num">${count(t)}</span></span>
+        ${newIn(t) ? html`<span class="dot" aria-label="新着あり"></span>` : null}
+      </button>`)}
     </div>
-    <div class="filter-row" style=${{ marginTop: '10px' }}>
-      <${Seg} small=${true} value=${kind} onChange=${setKind} label="種類"
-        options=${[{ value: 'all', label: 'すべて' }, { value: 'go', label: '📍 行きたい' }, { value: 'do', label: '✨ やりたい' }]} />
+
+    <div class="filter-row" style=${{ marginTop: '12px' }}>
+      <div class="input-wrap grow">
+        <${Icon} name="search" />
+        <input class="input" type="search" placeholder="さがす（名前・場所・メモ）" value=${q} onInput=${(e) => setQ(e.target.value)} aria-label="さがす" />
+        ${q ? html`<button class="clear" aria-label="消す" onClick=${() => setQ('')}><${Icon} name="close" size=${18} /></button>` : null}
+      </div>
       <button class=${'toggle-chip' + (bothOnly ? ' on' : '')} aria-pressed=${bothOnly} aria-label="ふたりとも☆のものだけ" title="ふたりとも☆のものだけ"
-        onClick=${() => setBothOnly(!bothOnly)}>
+        style=${{ minHeight: '48px' }} onClick=${() => setBothOnly(!bothOnly)}>
         <${Icon} name="star" fill=${bothOnly} />${bothOnly ? 'ふたりとも' : null}
       </button>
     </div>
+    ${q && hits(otherType) ? html`<button class="link-btn" style=${{ marginTop: '6px' }} onClick=${() => setType(otherType)}>
+      ${KINDS[otherType].long}にも ${hits(otherType)}件 →</button>` : null}
 
-    ${!snap.wishes.length ? html`<div class="empty">
-      <div class="e">📝</div>
-      <div class="t">まだなにもありません</div>
-      <div class="small" style=${{ marginTop: '6px', lineHeight: 1.8 }}>行ってみたいお店、見たい景色、やってみたいこと。<br />思いついたら、右下の「いつかを追加」から。</div>
+    ${!snap.wishes.some((w) => w.type === type) ? html`<div class="empty">
+      <div class="e">${type === 'go' ? '🗺️' : '🌟'}</div>
+      <div class="t">${type === 'go' ? '行きたいところは、まだありません' : 'やりたいことは、まだありません'}</div>
+      <div class="small" style=${{ marginTop: '6px', lineHeight: 1.8 }}>${type === 'go' ? '気になるお店、見たい景色、旅行先。' : 'やってみたい遊び、体験、挑戦。'}<br />右下の「追加」から書いておこう。</div>
     </div>` : !active && !groups.done.length && !groups.expired.length ? html`<div class="empty">
       <div class="e">🔍</div><div class="t">見つかりませんでした</div>
     </div>` : null}
@@ -81,4 +96,3 @@ export function WishTab({ snap, headerRight }) {
     </p>` : null}
   </div>`;
 }
-

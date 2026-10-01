@@ -7,7 +7,7 @@
 -- テーブルは anon から直接は読めないように閉じ、IDを知っている人だけが
 -- 下の関数（matane_pull / matane_push_batch）経由で読み書きできる。
 --
--- 部屋の中身（メンバー・やりたいこと・会う日・読書会の本・メモ・「私も」）は
+-- 部屋の中身（メンバー・やりたいこと・会う日・読書会の本・語りたいこと・付箋・「私も」）は
 -- すべて matane_items に kind 付きの jsonb で持つ（項目を足してもDB変更が要らない）。
 -- updated_at は端末側の更新時刻で、新しいほうだけが残る（後勝ち）。
 -- synced_at はサーバーに届いた時刻で、差分取得のしおりに使う。
@@ -24,7 +24,7 @@ create table if not exists public.matane_rooms (
 create table if not exists public.matane_items (
   room_id     text not null references public.matane_rooms(id) on delete cascade,
   id          text not null check (id ~ '^[A-Za-z0-9_-]{4,48}$'),
-  kind        text not null check (kind in ('member', 'wish', 'plan', 'book', 'note', 'like')),
+  kind        text not null check (kind in ('member', 'wish', 'plan', 'book', 'note', 'like', 'memo')),
   data        jsonb not null,
   deleted     boolean not null default false,
   updated_at  timestamptz not null,

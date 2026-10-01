@@ -3,11 +3,12 @@ import { go } from '../lib/router.js';
 import { saveItem, getItem } from '../lib/store.js';
 import { fmtLong, fmtDate, countdown, seasonOfDate, seasonById, monthKey, monthOf, parseDate, WD } from '../lib/dates.js';
 import { groupWishes, upcomingPlans, plansToReview, bookQueue, nextPicker, bookClubsInMonth, planForBook, planEnd } from '../lib/logic.js';
-import { noteId } from '../lib/ids.js';
+import { homeIconSrc } from '../lib/homeicon.js';
 import { useToday, usePair } from './hooks.js';
 import { Icon } from './icons.js';
-import { Cover, Progress, toast, Sparkles, celebrate } from './components.js';
+import { Cover, toast, Sparkles, celebrate, Avatar } from './components.js';
 import { WishTile, wishEmoji, isNewFromOther, KINDS } from './rows.js';
+import { BookPrep } from './BookPage.js';
 
 const { useState } = React;
 
@@ -18,7 +19,7 @@ export function HomeTab({ snap, headerRight, ui }) {
   const reviews = plansToReview(snap.plans, today);
   const groups = groupWishes(snap.wishes, { likes: snap.likes, memberCount: snap.members.length, today });
   const season = seasonById(seasonOfDate(today));
-  const news = [...snap.wishes, ...snap.books, ...snap.plans]
+  const news = [...snap.wishes, ...snap.books, ...snap.plans, ...snap.memos]
     .filter((x) => isNewFromOther(x, snap))
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
@@ -29,7 +30,7 @@ export function HomeTab({ snap, headerRight, ui }) {
 
   return html`<div>
     <header class="home-head">
-      <img class="logo" src="icons/icon-192.png" alt="" />
+      <img class="logo" src=${homeIconSrc()} alt="" />
       <div class="name grow"><span>またね</span></div>
       ${headerRight}
     </header>
@@ -39,6 +40,13 @@ export function HomeTab({ snap, headerRight, ui }) {
       <div class="date">${fmtLong(today)} ・ ${season.emoji} ${season.label}</div>
     </div>
 
+    ${other?.placeholder ? html`<button class="invite-card" onClick=${ui.openInvite}>
+      <${Sparkles} kind="small" />
+      <span class="avs"><${Avatar} m=${me} size="lg" /><span class="plus">＋</span><span class="avatar lg ghost">?</span></span>
+      <span class="grow"><span class="t">友だちを招待しよう</span><span class="s">リンクを送ると、ふたりで同じリストとカレンダーを使えます</span></span>
+      <${Icon} name="chevronRight" />
+    </button>` : null}
+
     <${NextHero} snap=${snap} upcoming=${upcoming} today=${today} other=${other} />
 
     ${reviews.length ? html`<h2 class="section">ふりかえり <span class="aside">やったことにチェック</span></h2>
@@ -46,11 +54,12 @@ export function HomeTab({ snap, headerRight, ui }) {
 
     ${news.length ? html`<h2 class="section">${other?.name ?? '相手'}から届いたもの <span class="badge new">NEW</span></h2>
       <div class="list">
-        ${news.slice(0, 4).map((x) => html`<button class="news" key=${x.id} onClick=${() => go(`/r/${snap.id}/${x.kind === 'wish' ? 'w' : x.kind === 'plan' ? 'p' : 'b'}/${x.id}`)}>
-          <span class="em">${x.kind === 'wish' ? wishEmoji(x) : x.kind === 'plan' ? '📅' : '📚'}</span>
+        ${news.slice(0, 4).map((x) => html`<button class="news" key=${x.id} onClick=${() => go(`/r/${snap.id}/${x.kind === 'wish' ? 'w' : x.kind === 'plan' ? 'p' : 'b'}/${x.kind === 'memo' ? x.bookId : x.id}`)}>
+          <span class="em">${x.kind === 'wish' ? wishEmoji(x) : x.kind === 'plan' ? '📅' : x.kind === 'memo' ? (x.type === 'talk' ? '🌟' : '📝') : '📚'}</span>
           <span class="grow">
-            <span class="bold ellipsis" style=${{ display: 'block' }}>${x.kind === 'plan' ? `${fmtDate(x.date)}に会う日` : x.title}</span>
-            <span class="tiny muted">${x.kind === 'wish' ? KINDS[x.type]?.long ?? 'いつか' : x.kind === 'plan' ? '会う日' : '読書会の本'}を追加</span>
+            <span class="bold ellipsis" style=${{ display: 'block' }}>${x.kind === 'plan' ? `${fmtDate(x.date)}に会う日` : x.kind === 'memo' ? (x.type === 'talk' ? x.text : x.quote || x.insight) : x.title}</span>
+            <span class="tiny muted">${x.kind === 'wish' ? `${KINDS[x.type]?.long ?? 'やりたいこと'}を追加` : x.kind === 'plan' ? '会う日を追加'
+              : x.kind === 'memo' ? `『${snap.bookById.get(x.bookId)?.title ?? '本'}』に${x.type === 'talk' ? '響いた話' : '付箋'}` : '読書会の本を追加'}</span>
           </span>
           <${Icon} name="chevronRight" size=${18} />
         </button>`)}
@@ -63,7 +72,7 @@ export function HomeTab({ snap, headerRight, ui }) {
     <button class="dice-btn" onClick=${ui.openDice}>
       <${Sparkles} kind="small" />
       <span class="ic">🌠</span>
-      <span class="grow"><span class="t" style=${{ display: 'block' }}>迷ったら、流れ星におまかせ</span><span class="s">いつかリストから今日やることを1つ選ぶよ</span></span>
+      <span class="grow"><span class="t" style=${{ display: 'block' }}>迷ったら、流れ星におまかせ</span><span class="s">やりたいことリストから今日やることを1つ選ぶよ</span></span>
       <${Icon} name="chevronRight" size=${18} />
     </button>
 
@@ -213,12 +222,18 @@ export function ClubCard({ snap, today, ui }) {
   const pickerId = nextPicker(snap.books, snap.members);
   const picker = snap.memberById.get(pickerId);
   const isMe = pickerId && pickerId === snap.me;
+  const todayClub = snap.plans.find((p) => p.bookClub && p.date <= today && planEnd(p) >= today);
 
   return html`<div class="club-card">
     <div class="club-head">
       <span class="t">📚 ${monthOf(today)}月の読書会</span>
       <${MonthDots} clubs=${clubs} goal=${goal} today=${today} />
     </div>
+    ${todayClub ? html`<button class="today-club" onClick=${() => go(todayClub.bookId ? `/r/${snap.id}/b/${todayClub.bookId}?talk=1` : `/r/${snap.id}/p/${todayClub.id}`)}>
+      <span class="ic">🌟</span>
+      <span class="grow"><span class="t">今日は読書会！</span><span class="s">「この話いいな」と思ったら、すぐメモ</span></span>
+      <span class="btn star small"><${Icon} name="plus" />響いた話</span>
+    </button>` : null}
     ${next
       ? html`<div style=${{ marginTop: '14px' }}><${BookLine} snap=${snap} b=${next} no=${q.no.get(next.id)} label="次回の本" today=${today} /></div>`
       : html`<div style=${{ marginTop: '14px' }}><${PickCta} snap=${snap} title="最初の本を決めよう" sub=${picker ? `${picker.name}が選ぶ？` : 'どちらが選んでもOK'} onClick=${ui.openBookAdd} /></div>`}
@@ -248,10 +263,6 @@ export function PickCta({ title, sub, onClick }) {
   </button>`;
 }
 
-export function noteOf(snap, bookId, memberId) {
-  return snap.notes.find((n) => n.id === noteId(bookId, memberId)) ?? null;
-}
-
 export function BookLine({ snap, b, no, label, today, small = false }) {
   const plan = planForBook(snap.plans, b.id, today);
   const picker = snap.memberById.get(b.pickedBy);
@@ -264,7 +275,7 @@ export function BookLine({ snap, b, no, label, today, small = false }) {
         ${plan && plan.date >= today ? html`<span class="bold" style=${{ color: 'var(--book)' }}>${fmtDate(plan.date)}に語る</span>` : html`<span>日にち未定</span>`}
         ${picker ? html`<span class="faint">・${picker.name}が選んだ本</span>` : null}
       </span>
-      ${small ? null : snap.members.map((m) => html`<${Progress} key=${m.id} m=${m} value=${noteOf(snap, b.id, m.id)?.progress ?? 0} />`)}
+      ${small ? null : html`<${BookPrep} snap=${snap} b=${b} />`}
     </span>
   </button>`;
 }
@@ -274,11 +285,11 @@ function SeasonSection({ snap, groups, season, today }) {
   const list = now.length ? now : groups.anytime;
   const title = now.length ? `${season.emoji} 今がちょうどいい` : '⏳ いつでもできること';
   if (!list.length) {
-    return html`<h2 class="section">${season.emoji} いつかやりたいこと</h2>
+    return html`<h2 class="section">${season.emoji} やりたいことリスト</h2>
       <button class="hero empty-hero" onClick=${() => go(`/r/${snap.id}/w/new`)}>
         <div style=${{ fontSize: '30px' }}>🌟</div>
         <div class="round bold" style=${{ fontSize: '16px', marginTop: '4px' }}>行きたいところ・やりたいことを書こう</div>
-        <div class="small muted">${season.label}にやりたいこと、期間限定のイベント、いつか行きたいお店…</div>
+        <div class="small muted">${season.label}にやりたいこと、期間限定のイベント、行ってみたいお店…</div>
       </button>`;
   }
   return html`<h2 class="section">${title}

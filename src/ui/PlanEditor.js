@@ -141,7 +141,7 @@ export function PlanEditor({ roomId, id, query }) {
             const w = t.wishId ? snap.wishById.get(t.wishId) : null;
             return html`<div class="todo-edit" key=${t.id}>
               <span class="em">${w ? wishEmoji(w) : '・'}</span>
-              <span class="tt"><span style=${{ display: 'block' }}>${w?.title ?? t.text}</span>${w ? html`<span class="tiny faint" style=${{ display: 'block', fontWeight: 500 }}>いつかリストから</span>` : null}</span>
+              <span class="tt"><span style=${{ display: 'block' }}>${w?.title ?? t.text}</span>${w ? html`<span class="tiny faint" style=${{ display: 'block', fontWeight: 500 }}>やりたいことリストから</span>` : null}</span>
               ${p.todos.length > 1 ? html`
                 <button class="mini-btn" aria-label="上へ" disabled=${i === 0} onClick=${() => move(i, -1)}><${Icon} name="arrowUp" /></button>
                 <button class="mini-btn" aria-label="下へ" disabled=${i === p.todos.length - 1} onClick=${() => move(i, 1)}><${Icon} name="arrowDown" /></button>` : null}
@@ -149,7 +149,7 @@ export function PlanEditor({ roomId, id, query }) {
             </div>`;
           })}
           <button class="list-item" onClick=${() => setPickOpen(true)} style=${{ color: 'var(--accent-deep)' }}>
-            <${Icon} name="star" /><span class="grow bold">いつかリストから選ぶ</span><${Icon} name="chevronRight" size=${18} />
+            <${Icon} name="star" /><span class="grow bold">やりたいことリストから選ぶ</span><${Icon} name="chevronRight" size=${18} />
           </button>
           <div class="add-row">
             <input class="input grow" value=${text} placeholder="自由に書く（例：ランチ、買い物）" aria-label="やることを書く"
@@ -187,7 +187,7 @@ export function PlanEditor({ roomId, id, query }) {
   </div>`;
 }
 
-// いつかリストから複数選ぶ
+// やりたいことリストから複数選ぶ
 function WishPicker({ open, onClose, snap, today, chosen, onDone }) {
   const [sel, setSel] = useState(chosen);
   const [q, setQ] = useState('');
@@ -197,19 +197,23 @@ function WishPicker({ open, onClose, snap, today, chosen, onDone }) {
   const g = groupWishes(list, { likes: snap.likes, memberCount: snap.members.length, today });
   const rows = [...g.now, ...g.anytime, ...g.later];
   const flip = (id) => { const s = new Set(sel); s.has(id) ? s.delete(id) : s.add(id); setSel(s); };
-  return html`<${Sheet} open=${open} onClose=${onClose} title="いつかリストから選ぶ">
+  return html`<${Sheet} open=${open} onClose=${onClose} title="やりたいことリストから選ぶ" tall=${true}>
     <div class="input-wrap" style=${{ marginBottom: '8px' }}>
       <${Icon} name="search" />
       <input class="input" type="search" placeholder="さがす" value=${q} onInput=${(e) => setQ(e.target.value)} aria-label="さがす" />
     </div>
-    ${rows.length ? html`<div>
-      ${rows.map(({ w, t, both }) => html`<button key=${w.id} class=${'check-row' + (sel.has(w.id) ? ' on' : '')} onClick=${() => flip(w.id)} aria-pressed=${sel.has(w.id)}>
-        <span class="box"><${Icon} name="check" stroke=${3} /></span>
-        <span style=${{ fontSize: '20px' }}>${wishEmoji(w)}</span>
-        <span class="grow"><span class="label-t" style=${{ display: 'block' }}>${w.title}</span>
-          <span class="tiny muted">${KINDS[w.type]?.label}${t.group === 'now' ? '・今がちょうどいい' : t.group === 'later' ? '・季節待ち' : ''}${both ? '・ふたりとも☆' : ''}</span></span>
-      </button>`)}
-    </div>` : html`<div class="empty small">${snap.wishes.length ? '見つかりませんでした' : 'いつかリストはまだ空です'}</div>`}
+    ${rows.length ? ['go', 'do'].map((type) => {
+      const part = rows.filter((x) => x.w.type === type);
+      return part.length ? html`<div key=${type}>
+        <div class="group-head" style=${{ margin: '14px 2px 4px' }}><span class="t">${KINDS[type].emoji} ${KINDS[type].long}</span><span class="n">${part.length}</span><span class="line"></span></div>
+        ${part.map(({ w, t, both }) => html`<button key=${w.id} class=${'check-row' + (sel.has(w.id) ? ' on' : '')} onClick=${() => flip(w.id)} aria-pressed=${sel.has(w.id)}>
+          <span class="box"><${Icon} name="check" stroke=${3} /></span>
+          <span style=${{ fontSize: '20px' }}>${wishEmoji(w)}</span>
+          <span class="grow"><span class="label-t" style=${{ display: 'block' }}>${w.title}</span>
+            <span class="tiny muted">${[t.group === 'now' ? '今がちょうどいい' : t.group === 'later' ? '季節待ち' : 'いつでも', both ? 'ふたりとも☆' : '', w.place?.name ?? w.area ?? ''].filter(Boolean).join('・')}</span></span>
+        </button>`)}
+      </div>` : null;
+    }) : html`<div class="empty small">${snap.wishes.length ? '見つかりませんでした' : 'やりたいことリストはまだ空です'}</div>`}
     <div style=${{ position: 'sticky', bottom: 0, background: 'var(--surface)', paddingTop: '10px' }}>
       <button class="btn primary block" onClick=${() => onDone([...sel])}>${sel.size ? `${sel.size}個をこの日に入れる` : '決定'}</button>
     </div>

@@ -107,4 +107,8 @@ New-Icon -size 512 -path (Join-Path $root "icon-maskable-512.png") -square $true
 New-Icon -size 180 -path (Join-Path $root "icon-180.png") -square $true -variant $v
 New-Icon -size 32  -path (Join-Path $root "favicon-32.png") -square $false -variant $v
 
+# ほかに選べる「白い空」の版（設定 → ホーム画面のアイコン）
+New-Icon -size 180 -path (Join-Path $root "day-180.png") -square $true -variant 'day'
+New-Icon -size 192 -path (Join-Path $root "day-192.png") -square $false -variant 'day'
+
 Write-Host "Icons generated in $root"

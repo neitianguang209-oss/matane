@@ -1,10 +1,11 @@
+param([int]$Port = 0)
 # 最小の静的ファイルサーバ（ビルド不要・依存なし）
 # 使い方:  powershell -ExecutionPolicy Bypass -File serve.ps1
 # ブラウザで http://localhost:<PORT> を開く
 # 同じWi-Fi内のスマホからは http://<このPCのLAN IP>:<PORT> でアクセス可能（管理者権限で起動した場合のみ）
 #
 # ↓↓↓ プロジェクトごとに、他のプロジェクトと被らない番号に変更すること（~/.claude/launch.json を確認）
-$port = 5509
+$port = if ($Port -gt 0) { $Port } else { 5509 }   # -Port 5510 のように別の番号でも起動できる
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 $lanIp = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {

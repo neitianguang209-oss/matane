@@ -4,7 +4,7 @@ import { saveItem, getItem } from '../lib/store.js';
 import { newId } from '../lib/ids.js';
 import { fmtDate, todayStr, countdown } from '../lib/dates.js';
 import { wishTiming, wantersOf, plansWithWish, upcomingPlans, planTitle, seasonLabel } from '../lib/logic.js';
-import { mapsUrl } from '../lib/share.js';
+import { mapUrlFor } from '../lib/places.js';
 import { useRoom, useToday, usePair } from './hooks.js';
 import { Icon } from './icons.js';
 import { Avatar, Sheet, TopBar, toast, SeasonBadge, celebrate } from './components.js';
@@ -19,7 +19,7 @@ export function WishPage({ roomId, id }) {
   const [planOpen, setPlanOpen] = useState(false);
   const w = snap.wishById.get(id);
   if (!w) {
-    return html`<div class="page no-nav"><${TopBar} title="いつか" onBack=${() => back(`/r/${roomId}/wish`)} />
+    return html`<div class="page no-nav"><${TopBar} title="やりたいこと" onBack=${() => back(`/r/${roomId}/wish`)} />
       <div class="empty"><div class="e">🫥</div><div class="t">見つかりませんでした</div><div class="small">消されたのかもしれません。</div></div></div>`;
   }
   const t = wishTiming(w, today);
@@ -40,7 +40,7 @@ export function WishPage({ roomId, id }) {
   }
   function undoDone() {
     saveItem(roomId, { ...w, doneAt: null, donePlanId: null });
-    toast('いつかリストに戻したよ');
+    toast('やりたいことリストに戻したよ');
   }
 
   let host = '';
@@ -104,8 +104,9 @@ export function WishPage({ roomId, id }) {
       ${w.url ? html`<a class="list-item" href=${w.url} target="_blank" rel="noopener noreferrer">
         <${Icon} name="link" /><div class="grow"><div class="bold">リンクを開く</div><div class="tiny muted ellipsis">${host || w.url}</div></div><${Icon} name="external" size=${18} />
       </a>` : null}
-      ${w.type === 'go' || w.area ? html`<a class="list-item" href=${mapsUrl([w.title, w.area].filter(Boolean).join(' '))} target="_blank" rel="noopener noreferrer">
-        <${Icon} name="mapPin" /><div class="grow"><div class="bold">Googleマップで見る</div><div class="tiny muted ellipsis">「${[w.title, w.area].filter(Boolean).join(' ')}」で検索</div></div><${Icon} name="external" size=${18} />
+      ${w.type === 'go' || w.area || w.place ? html`<a class="list-item" href=${mapUrlFor(w)} target="_blank" rel="noopener noreferrer">
+        <${Icon} name="mapPin" /><div class="grow"><div class="bold">${w.place ? w.place.name : 'Googleマップで見る'}</div>
+          <div class="tiny muted ellipsis">${w.place ? [w.place.kind, w.place.where].filter(Boolean).join('・') + ' ・Googleマップで開く' : `「${[w.title, w.area].filter(Boolean).join(' ')}」で検索`}</div></div><${Icon} name="external" size=${18} />
       </a>` : null}
     </div>` : null}
 

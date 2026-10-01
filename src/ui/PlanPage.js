@@ -6,9 +6,10 @@ import { planEnd, planTitle, bookQueue } from '../lib/logic.js';
 import { googleCalendarUrl, icsText, lineText, lineShareUrl, downloadFile, mapsUrl } from '../lib/share.js';
 import { useRoom, useToday } from './hooks.js';
 import { Icon } from './icons.js';
-import { TopBar, Cover, Progress, toast, copyText, Sparkles, celebrate } from './components.js';
+import { TopBar, Cover, toast, copyText, Sparkles, celebrate } from './components.js';
 import { wishEmoji } from './rows.js';
-import { ReviewCard, noteOf } from './HomeTab.js';
+import { ReviewCard } from './HomeTab.js';
+import { BookPrep } from './BookPage.js';
 
 export function PlanPage({ roomId, id }) {
   const { snap } = useRoom(roomId);
@@ -66,9 +67,14 @@ export function PlanPage({ roomId, id }) {
             <span class="kick" style=${{ display: 'block' }}>第${q.no.get(book.id)}回${book.doneAt ? '・語り終えた本' : ''}</span>
             <span class="bt" style=${{ display: 'block' }}>${book.title}</span>
             ${book.author ? html`<span class="ba">${book.author}</span>` : null}
-            ${snap.members.map((m) => html`<${Progress} key=${m.id} m=${m} value=${noteOf(snap, book.id, m.id)?.progress ?? 0} />`)}
+            <${BookPrep} snap=${snap} b=${book} />
           </span>
         </button>
+        ${p.date <= today && planEnd(p) >= today ? html`<button class="today-club" onClick=${() => go(`/r/${roomId}/b/${book.id}?talk=1`)}>
+          <span class="ic">🌟</span>
+          <span class="grow"><span class="t">今日は読書会！</span><span class="s">「この話いいな」と思ったら、すぐメモ</span></span>
+          <span class="btn star small"><${Icon} name="plus" />響いた話</span>
+        </button>` : null}
       </div>` : html`<button class="pick-cta" onClick=${() => go(`/r/${roomId}/p/${p.id}/edit`)}>
         <span class="ic"><${Icon} name="book" /></span>
         <span class="grow"><span class="t" style=${{ display: 'block' }}>語る本がまだ決まっていません</span><span class="s">タップして本を選ぶ</span></span>

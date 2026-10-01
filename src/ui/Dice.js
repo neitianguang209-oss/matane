@@ -1,4 +1,4 @@
-// 流れ星におまかせ：いつかリストから1つ選ぶ（今の季節・いつでもできるものから）
+// 流れ星におまかせ：やりたいことリストから1つ選ぶ（今の季節・いつでもできるものから）
 import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
 import { groupWishes } from '../lib/logic.js';
@@ -63,7 +63,7 @@ export function DiceSheet({ open, onClose, snap }) {
         ` : html`
           <div class="em">📝</div>
           <div class="tt">候補がありません</div>
-          <div class="small muted">いつかリストに追加すると、ここから選べます</div>
+          <div class="small muted">やりたいことリストに追加すると、ここから選べます</div>
         `}
       </div>
       ${phase === 'landed' && w ? html`<div class="row">

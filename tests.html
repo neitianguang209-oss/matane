@@ -17,7 +17,8 @@
     import * as D from './src/lib/dates.js';
     import * as L from './src/lib/logic.js';
     import { guessEmoji } from './src/lib/emoji.js';
-    import { normalizeIsbn } from './src/lib/books.js';
+    import { normalizeIsbn, toKatakana, foldText, bookScore, splitWords } from './src/lib/books.js';
+    import { placeQueries, toPlace } from './src/lib/places.js';
 
     const out = document.getElementById('out');
     let pass = 0, fail = 0;
@@ -121,6 +122,36 @@
     // ---- その他 ----
     t('guessEmoji', () => eq([guessEmoji('鎌倉のカフェ', 'go'), guessEmoji('ハンバーグ', 'go'), guessEmoji('温泉旅行', 'go'), guessEmoji('何か', 'do')], ['☕', '📍', '♨️', '✨']));
     t('normalizeIsbn', () => eq([normalizeIsbn('978-4-06-293438-1'), normalizeIsbn('4062934388')], ['9784062934381', '9784062934381']));
+
+    // ---- 本のあいまい検索 ----
+    t('toKatakana', () => eq(toKatakana('のるうぇいのもり'), 'ノルウェイノモリ'));
+    t('foldText 表記ゆれ', () => eq(foldText('コンビニ人間（文庫）'), foldText('こんびに人間 文庫')));
+    t('splitWords', () => eq(splitWords('村上春樹　ノルウェイ'), ['村上春樹', 'ノルウェイ']));
+    t('bookScore 完全一致が先', () => {
+      const a = { title: 'ノルウェイの森', authors: ['村上春樹'], publisher: '講談社', isbn: '1' };
+      const b = { title: '散文の構造と『ノルウェイの森』', authors: ['秋本博夫'], publisher: '某社', isbn: '2' };
+      if (!(bookScore(a, 'ノルウェイの森') < bookScore(b, 'ノルウェイの森'))) throw new Error('順番が逆');
+    });
+    t('bookScore 著者＋タイトル', () => {
+      const a = { title: 'ノルウェイの森 上', authors: ['村上春樹'], publisher: '講談社', isbn: '1' };
+      const b = { title: 'ノルウェイ紀行', authors: ['田中'], publisher: '某社', isbn: '2' };
+      if (!(bookScore(a, '村上 ノルウェイ') < bookScore(b, '村上 ノルウェイ'))) throw new Error('順番が逆');
+    });
+    t('bookScore 大活字本は後ろ', () => {
+      const a = { title: 'コンビニ人間', authors: ['村田沙耶香'], publisher: '文藝春秋', isbn: '1' };
+      const b = { title: 'コンビニ人間', authors: ['村田沙耶香'], publisher: '埼玉福祉会', isbn: '2' };
+      if (!(bookScore(a, 'コンビニ人間') < bookScore(b, 'コンビニ人間'))) throw new Error('順番が逆');
+    });
+
+    // ---- 場所の候補 ----
+    t('placeQueries 「の」で区切る', () => eq(placeQueries('鎌倉のしらす丼'), ['鎌倉のしらす丼', '鎌倉', 'しらす丼']));
+    t('placeQueries 動詞を外す', () => eq(placeQueries('紅葉の高尾山に登る'), ['紅葉の高尾山に登る', '紅葉', '高尾山']));
+    t('placeQueries 空', () => eq(placeQueries('  '), []));
+    t('toPlace', () => {
+      const p = toPlace({ geometry: { coordinates: [139.24, 35.62] }, properties: { name: '高尾山', city: '八王子市', state: '東京都', osm_value: 'peak', countrycode: 'JP' } });
+      eq([p.name, p.where, p.kind, p.skip], ['高尾山', '八王子市・東京都', '山', false]);
+      eq(toPlace({ properties: { name: 'x', osm_value: 'bus_stop' } }).skip, true);
+    });
 
     document.getElementById('sum').innerHTML = fail ? `<span class="ng">${fail}件 失敗</span> / ${pass}件 成功` : `<span class="ok">全${pass}件 成功</span>`;
   </script>

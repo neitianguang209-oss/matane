@@ -30,9 +30,36 @@ export function initial(name) {
   const s = String(name ?? '').trim();
   return s ? Array.from(s)[0].toUpperCase() : '?';
 }
+// 写真があれば写真、無ければ色つきの頭文字
 export function Avatar({ m, size = '', title }) {
   const c = memberColor(m);
+  if (m?.photo) {
+    return html`<span class=${'avatar photo ' + size} style=${{ '--c': c }} title=${title ?? m?.name} aria-hidden="true">
+      <img src=${m.photo} alt="" />
+    </span>`;
+  }
   return html`<span class=${'avatar ' + size} style=${{ '--c': c, '--fg': inkOn(c) }} title=${title ?? m?.name} aria-hidden="true">${initial(m?.name)}</span>`;
+}
+
+// 写真を正方形に切り抜いて小さくする（アイコン用。dataURL を返す）
+export function squareImage(file, size = 192, type = 'image/jpeg', quality = 0.86) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const s = Math.min(img.naturalWidth, img.naturalHeight);
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const g = canvas.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, size, size);
+        resolve(canvas.toDataURL(type, quality));
+      } catch (err) { reject(err); } finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('画像を読み込めませんでした')); };
+    img.src = url;
+  });
 }
 export function AvatarStack({ members, size = 'sm' }) {
   return html`<span class="avatars">${members.filter(Boolean).map((m) => html`<${Avatar} key=${m.id} m=${m} size=${size} />`)}</span>`;
@@ -143,21 +170,10 @@ export function Cover({ book, width = 64 }) {
   </div>`;
 }
 
-export function Progress({ m, value }) {
-  const v = Math.max(0, Math.min(100, value ?? 0));
-  return html`<div class="progress">
-    <${Avatar} m=${m} size="xs" />
-    <div class="bar" role="progressbar" aria-label=${`${m?.name}の読み進み`} aria-valuenow=${v} aria-valuemin="0" aria-valuemax="100">
-      <i style=${{ width: v + '%', '--c': memberColor(m) }}></i>
-    </div>
-    <span class="pct">${v >= 100 ? '読了' : v + '%'}</span>
-  </div>`;
-}
-
 // ---------------------------------------------------------------------
 // 下から出るシート
 // ---------------------------------------------------------------------
-export function Sheet({ open, onClose, title, children }) {
+export function Sheet({ open, onClose, title, children, tall = false }) {
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return;
@@ -167,18 +183,26 @@ export function Sheet({ open, onClose, title, children }) {
     const t = setTimeout(() => {
       if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     }, 30);
+    // シートの中の入力欄にカーソルが入ったら、キーボードに隠れないように見える所まで動かす
+    const onFocus = (e) => {
+      if (!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      setTimeout(() => e.target.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }), 320);
+    };
+    const el = ref.current;
+    el?.addEventListener('focusin', onFocus);
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
+      el?.removeEventListener('focusin', onFocus);
       clearTimeout(t);
       document.body.style.overflow = '';
-      prev?.focus?.();
+      prev?.focus?.({ preventScroll: true });
     };
   }, [open]);
   if (!open) return null;
   return html`<div>
     <div class="sheet-backdrop" onClick=${onClose}></div>
-    <div class="sheet" role="dialog" aria-modal="true" aria-label=${title} tabindex="-1" ref=${ref}>
+    <div class=${"sheet" + (tall ? " tall" : "")} role="dialog" aria-modal="true" aria-label=${title} tabindex="-1" ref=${ref}>
       <div class="grab"></div>
       ${title ? html`<div class="row between"><h3>${title}</h3>
         <button class="icon-btn" aria-label="閉じる" onClick=${onClose}><${Icon} name="close" /></button></div>` : null}

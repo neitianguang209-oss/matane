@@ -60,6 +60,7 @@ async function fetchNdl(params) {
       volume: text('dcndl', 'volume'),
       authors: all('dc', 'creator').map((n) => cleanCreator(n.textContent)).filter(Boolean),
       publisher: cleanPublisher(text('dc', 'publisher')),
+      series: text('dcndl', 'seriesTitle').replace(/\s*;\s*[\d\-ー]+.*$/, ''),
       year: text('dc', 'date').slice(0, 4),
       isbn: normalizeIsbn(typed('dcndl:ISBN13') || typed('dcndl:ISBN')),
       paper: kinds.includes('紙'),
@@ -90,47 +91,111 @@ async function fetchGoogle(q) {
   }).filter((b) => b.title);
 }
 
-const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/[\s　]+/g, '');
+// ---------------------------------------------------------------------
+// あいまい検索
+//   国会図書館は「関連の高い順」に並べてくれない（五十音順で上限まで）ので、
+//   タイトル・著者・タイトル＋著者の組み合わせを同時に引き、Google Books（関連順）も足して、
+//   こちらで「どれだけ言葉が合っているか」で並べ直す。
+//   ひらがなで打ったときはカタカナでも探す（「のるうぇい」→「ノルウェイ」）。
+// ---------------------------------------------------------------------
+export const toKatakana = (s) => String(s).replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
+// 比べるための形：全角半角・大文字小文字・カタカナ/ひらがな・記号の違いを無くす
+export function foldText(s) {
+  return String(s || '').normalize('NFKC').toLowerCase()
+    .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[\s　・:：、,.。!！?？「」『』()（）\[\]［］〈〉《》"'“”‘’\-‐–—~〜]/g, '');
+}
+export function splitWords(q) {
+  return String(q || '').normalize('NFKC').split(/[\s　]+/).map((w) => w.trim()).filter(Boolean);
+}
+
+// 検索結果1件の「合い方」（小さいほど上）
+export function bookScore(b, query) {
+  const words = splitWords(query).map(foldText).filter(Boolean);
+  const whole = foldText(query);
+  const t = foldText(b.title);
+  const tv = foldText(b.title + (b.volume ?? ''));
+  const a = foldText((b.authors ?? []).join(''));
+  const vol = /^[上中下\d一二三四五六七八九十]|巻|^第/.test(String(b.volume ?? '').normalize('NFKC').trim());   // 「上」「1」などの巻だけ
+  let m;
+  // 上・中・下、1・2…の順に並ぶように少しだけ差をつける
+  const vs = String(b.volume ?? '').normalize('NFKC').trim();
+  const volOrder = vol ? ({ 上: 1, 中: 2, 下: 3 }[vs[0]] ?? Math.min(9, parseInt(vs, 10) || 5)) * 0.01 : 0;
+  if (t === whole || tv === whole) m = (vol ? 0.2 : 0) + volOrder;          // そのまま（上・下巻も本編として）
+  else if (words.length > 1 && words.every((w) => t.includes(w) || a.includes(w))) {
+    // 「村上 ノルウェイ」：著者とタイトルに分けて当たる本（＝その作家のその本）がいちばん
+    const inTitle = words.filter((w) => t.includes(w));
+    const inAuthor = words.filter((w) => !t.includes(w) && a.includes(w));
+    const extra = Math.min(0.4, Math.max(0, t.length - inTitle.join('').length) * 0.03);   // タイトルが短いほど本そのもの
+    if (inTitle.length && inAuthor.length) m = (t.startsWith(inTitle[0]) ? 0.5 : 1.2) + extra;
+    else if (inTitle.length === words.length) m = t.startsWith(words[0]) ? 1.5 : 2.2;
+    else m = 2.5;
+  }
+  else if (t.startsWith(whole)) m = 1;
+  else if (t.includes(whole)) m = 2;
+  else if (a.includes(whole)) m = 2.5;
+  else if (words.some((w) => t.includes(w) || a.includes(w))) m = 5;
+  else m = 8;
+  const foreign = /[ぁ-んァ-ヶ一-龠]/.test(b.publisher + b.title) ? 0 : 4;   // 日本の出版社の本を先に
+  const otherScript = /[Ѐ-ӿ가-힯฀-๿]|語版|〔.*[A-Za-z].*〕/.test(b.title + (b.volume ?? '')) ? 4 : 0;   // ロシア語・韓国語などの版
+  const special = /福祉会|点字|大活字|大きな文字|オンデマンド|朗読|音訳|オーディオ|パンフレット/.test(b.publisher + (b.volume ?? '') + b.title + (b.series ?? '')) ? 3 : 0;   // 大活字本などは後ろへ
+  const format = /文庫/.test(b.series ?? '') ? -0.3 : /コミック|まんが|マンガ/.test((b.series ?? '') + b.title) ? 0.6 : 0;   // 読書会は文庫が多い
+  const handmade = /手製|図書館/.test(b.publisher) ? 5 : 0;                  // 図書館が作った複製
+  const translated = /^\[.*\]$/.test(String(b.title).trim()) || /^\[.*\]$/.test(String(b.publisher).trim()) ? 4 : 0;   // 海外の版（目録が[ ]で読みを補っている）
+  return m + foreign + otherScript + special + format + handmade + translated + (b.isbn ? 0 : 1) + (b.publisher ? 0 : 1) + (b.rank ?? 0);
+}
+
+function withTimeout(p, ms = 9000) {
+  return Promise.race([p, new Promise((resolve) => setTimeout(() => resolve([]), ms))]);
+}
+const safe = (p) => withTimeout(p).catch((err) => { console.warn('book search', err); return []; });
 
 export async function searchBooks(query) {
-  const q = query.trim();
+  const q = String(query || '').trim();
   if (!q) return [];
   const isbn = normalizeIsbn(q);
-  let books = [];
-  try {
-    const items = await fetchNdl(isbn ? { isbn, cnt: 20 } : { any: q, cnt: 30, mediatype: 'books' });
-    // 同じ本の複数レコード（紙・電子・点字など）を1冊にまとめる
-    const groups = new Map();
-    for (const it of items) {
-      if (!it.isbn && !it.paper) continue;
-      const key = it.isbn || it.title + '|' + it.publisher + '|' + it.year;
-      const cur = groups.get(key);
-      if (!cur) groups.set(key, it);
-      else for (const k of Object.keys(it)) if (!cur[k] || (Array.isArray(cur[k]) && !cur[k].length)) cur[k] = it[k];
+  const NDL = (params) => safe(fetchNdl({ cnt: 40, mediatype: 'books', ...params }));
+  const jobs = [];
+  if (isbn) {
+    jobs.push(NDL({ isbn, cnt: 20 }), safe(fetchGoogle('isbn:' + isbn)));
+  } else {
+    const words = splitWords(q);
+    jobs.push(NDL({ title: q, cnt: 100 }));
+    if (words.length === 1) jobs.push(NDL({ creator: q, cnt: 30 }));
+    else {
+      // 「村上春樹 ノルウェイ」「ノルウェイ 村上」のどちらの順でも当たるように
+      jobs.push(NDL({ creator: words[0], title: words.slice(1).join(' '), cnt: 30 }));
+      jobs.push(NDL({ creator: words[words.length - 1], title: words.slice(0, -1).join(' '), cnt: 30 }));
     }
-    books = [...groups.values()];
-  } catch (err) {
-    console.warn('NDL search failed', err);
+    if (/[ぁ-ゖ]/.test(q) && !/[一-龠ァ-ヶ]/.test(q)) jobs.push(NDL({ title: toKatakana(q) }));
+    jobs.push(safe(fetchGoogle(q)).then((list) => list.map((b, i) => ({ ...b, rank: i * 0.04 }))));
   }
-  if (books.length < 3) {
-    try {
-      const g = await fetchGoogle(isbn ? 'isbn:' + isbn : q);
-      const seen = new Set(books.map((b) => b.isbn).filter(Boolean));
-      books = books.concat(g.filter((b) => !b.isbn || !seen.has(b.isbn)));
-    } catch (err) { console.warn('Google Books failed', err); }
+  const lists = await Promise.all(jobs);
+
+  // 同じ本の複数レコード（紙・電子・点字、国会図書館とGoogleの重なり）を1冊にまとめる
+  const groups = new Map();
+  for (const it of lists.flat()) {
+    if (!it?.title) continue;
+    if (it.paper === false && !it.isbn) continue;   // 点字・音声版だけのレコードは出さない
+    const key = it.isbn || foldText(it.title + (it.volume ?? '')) + '|' + foldText(it.publisher) + '|' + it.year;
+    const cur = groups.get(key);
+    if (!cur) { groups.set(key, { ...it }); continue; }
+    for (const k of Object.keys(it)) {
+      if (k === 'rank') cur.rank = Math.min(cur.rank ?? 9, it.rank ?? 9);
+      else if (!cur[k] || (Array.isArray(cur[k]) && !cur[k].length)) cur[k] = it[k];
+    }
   }
-  const nq = norm(q);
-  const score = (b) => {
-    const t = norm(b.title);
-    const m = t === nq ? 0 : t.startsWith(nq) ? 1 : t.includes(nq) ? 2 : norm(b.authors.join('')).includes(nq) ? 2 : 3;
-    const foreign = /[ぁ-んァ-ヶ一-龠]/.test(b.publisher + b.title) ? 0 : 4;   // 日本の出版社の本を先に
-    const special = /福祉会|点字|大活字|大きな文字|オンデマンド/.test(b.publisher + (b.volume ?? '')) ? 3 : 0;   // 大活字本などは後ろへ
-    return m + foreign + special + (b.isbn ? 0 : 1);
-  };
-  return books
-    .filter((b) => b.title)
-    .sort((a, b) => score(a) - score(b) || String(b.year).localeCompare(String(a.year)))
-    .slice(0, 20);
+  // ISBN の無い古い目録が、ISBN つきの同じ版と重なっていたら外す
+  const withIsbn = new Set([...groups.values()].filter((b) => b.isbn).map((b) => foldText(b.title + (b.volume ?? '')) + '|' + foldText(b.publisher) + '|' + b.year));
+  for (const [k, b] of groups) {
+    if (!b.isbn && withIsbn.has(foldText(b.title + (b.volume ?? '')) + '|' + foldText(b.publisher) + '|' + b.year)) groups.delete(k);
+  }
+  return [...groups.values()]
+    .map((b) => ({ ...b, rank: b.rank ?? 0.6, _s: 0 }))
+    .map((b) => ({ ...b, _s: bookScore(b, q) }))
+    .sort((a, b) => a._s - b._s || String(b.year).localeCompare(String(a.year)))
+    .slice(0, 24)
+    .map(({ _s, rank, ...b }) => b);
 }
 
 // 表紙の候補URL（順に試す）

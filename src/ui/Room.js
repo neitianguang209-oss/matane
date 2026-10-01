@@ -1,4 +1,4 @@
-// 部屋のタブ（ホーム・いつか・カレンダー・読書会）と、右下の追加ボタン
+// 部屋のタブ（ホーム・やりたいこと・カレンダー・読書会）と、右下の追加ボタン
 import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
 import { useRoom, useOnline, usePair } from './hooks.js';
@@ -6,7 +6,7 @@ import { Icon } from './icons.js';
 import { Sheet, SyncDot, AvatarStack } from './components.js';
 import { InviteSheet } from './RoomGate.js';
 import { HomeTab } from './HomeTab.js';
-import { WishTab } from './WishTab.js';
+import { WishTab, listType } from './WishTab.js';
 import { CalendarTab } from './CalendarTab.js';
 import { BookTab } from './BookTab.js';
 import { DiceSheet } from './Dice.js';
@@ -17,7 +17,7 @@ const { useState, useEffect } = React;
 
 const TABS = [
   { id: 'home', label: 'ホーム', icon: 'home' },
-  { id: 'wish', label: 'いつか', icon: 'star' },
+  { id: 'wish', label: 'やりたいこと', icon: 'star' },
   { id: 'cal', label: 'カレンダー', icon: 'calendar' },
   { id: 'book', label: '読書会', icon: 'book' },
 ];
@@ -62,7 +62,7 @@ export function Room({ roomId, tab, query }) {
 
   const fab = {
     home: html`<button class="fab" onClick=${() => setAddOpen(true)} aria-label="追加"><${Icon} name="plus" />追加</button>`,
-    wish: html`<button class="fab" onClick=${() => go(base + '/w/new')}><${Icon} name="plus" />いつかを追加</button>`,
+    wish: html`<button class="fab" onClick=${() => go(base + '/w/new?type=' + listType())}><${Icon} name="plus" />追加</button>`,
     cal: html`<button class="fab" onClick=${() => go(base + '/p/new')}><${Icon} name="calendarPlus" />会う日を追加</button>`,
     book: html`<button class="fab book" onClick=${() => setBookOpen(true)}><${Icon} name="plus" />本を追加</button>`,
   }[tab] ?? null;
@@ -94,9 +94,9 @@ function AddMenu({ open, onClose, base, onBook, onDice }) {
     <${Icon} name="chevronRight" size=${18} />
   </button>`;
   return html`<${Sheet} open=${open} onClose=${onClose} title="なにを追加する？">
-    ${item('📍', 'var(--accent-soft)', '行きたいところ・やりたいこと', 'いつかリストに入れておく', () => { onClose(); go(base + '/w/new'); })}
+    ${item('📍', 'var(--accent-soft)', '行きたいところ・やりたいこと', 'やりたいことリストに入れておく', () => { onClose(); go(base + '/w/new'); })}
     ${item('📅', '#fff4e0', '会う日', '日にちと、その日にやること', () => { onClose(); go(base + '/p/new'); })}
     ${item('📚', 'var(--book-soft)', '読書会の本', '次回・次々回に読む本', onBook)}
-    ${item('🌠', 'linear-gradient(135deg, var(--night), var(--night-2))', '流れ星におまかせ', '迷ったら、いつかリストから1つ選んでもらう', onDice)}
+    ${item('🌠', 'linear-gradient(135deg, var(--night), var(--night-2))', '流れ星におまかせ', '迷ったら、やりたいことリストから1つ選んでもらう', onDice)}
   <//>`;
 }

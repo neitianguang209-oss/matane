@@ -1,6 +1,7 @@
 import { html, React } from '../lib/html.js';
 import { go, back } from '../lib/router.js';
 import { createRoom, importRoom } from '../lib/store.js';
+import { homeIconSrc } from '../lib/homeicon.js';
 import { Icon } from './icons.js';
 import { Sheet, toast, TopBar, Avatar, Sparkles } from './components.js';
 
@@ -38,7 +39,7 @@ export function Welcome() {
     <div style=${{ margin: '4px 0 30px' }}>
       <div class="feat">
         <div class="ic" style=${{ background: 'var(--star-soft)' }}>⭐</div>
-        <div><div class="t">「いつか」を登録し合う</div><div class="s">思いついたら書いておくだけ。季節や期限で、今ちょうどいいものが上に来ます。</div></div>
+        <div><div class="t">やりたいことを登録し合う</div><div class="s">思いついたら書いておくだけ。季節や期限で、今ちょうどいいものが上に来ます。</div></div>
       </div>
       <div class="feat">
         <div class="ic" style=${{ background: 'var(--accent-soft)' }}>📅</div>
@@ -68,7 +69,7 @@ export function Welcome() {
 export function Sky({ children }) {
   return html`<div class="sky">
     <${Sparkles} kind="sky" />
-    <img class="logo" src="icons/icon-192.png" alt="" />
+    <img class="logo" src=${homeIconSrc()} alt="" />
     ${children}
   </div>`;
 }

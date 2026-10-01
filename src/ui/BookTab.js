@@ -4,8 +4,9 @@ import { monthKey, monthOf, fmtDate } from '../lib/dates.js';
 import { bookQueue, nextPicker, bookClubsInMonth, planForBook } from '../lib/logic.js';
 import { useToday } from './hooks.js';
 import { Icon } from './icons.js';
-import { TopBar, Cover, Progress, Sparkles } from './components.js';
-import { MonthDots, PickCta, noteOf } from './HomeTab.js';
+import { TopBar, Cover, Sparkles } from './components.js';
+import { MonthDots, PickCta } from './HomeTab.js';
+import { BookPrep } from './BookPage.js';
 
 export function BookTab({ snap, headerRight, ui }) {
   const today = useToday();
@@ -87,9 +88,7 @@ function BigBook({ snap, b, no, today }) {
         </div>
       </div>
     </div>
-    <div style=${{ marginTop: '14px' }}>
-      ${snap.members.map((m) => html`<${Progress} key=${m.id} m=${m} value=${noteOf(snap, b.id, m.id)?.progress ?? 0} />`)}
-    </div>
+    <div style=${{ marginTop: '6px' }}><${BookPrep} snap=${snap} b=${b} /></div>
   </button>`;
 }
 

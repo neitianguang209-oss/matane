@@ -18,16 +18,21 @@ const scrollMemory = new Map();
 function useNewsToasts() {
   React.useEffect(() => onNews((roomId, items) => {
     const snap = getRoom(roomId);
-    const first = items[0];
+    const KINDS = ['wish', 'plan', 'book', 'memo'];
+    const list = items.filter((x) => KINDS.includes(x.kind));
+    const first = list[0];
+    if (!first) return;
     const who = snap?.memberById.get(first.createdBy)?.name ?? '相手';
+    const book = first.kind === 'memo' ? snap?.bookById.get(first.bookId) : null;
     const what = {
-      wish: () => `「${first.title}」をいつかリストに追加したよ`,
+      wish: () => `「${first.title}」をやりたいことリストに追加したよ`,
       plan: () => '会う日を追加したよ',
       book: () => `読書会の本『${first.title}』を追加したよ`,
+      memo: () => (first.type === 'talk' ? `響いた話をメモしたよ` : `${book ? `『${book.title}』に` : ''}付箋を貼ったよ`),
     }[first.kind];
-    if (!what) return;
-    const more = items.filter((x) => ['wish', 'plan', 'book'].includes(x.kind)).length - 1;
-    const base = first.kind === 'wish' ? `/r/${roomId}/w/${first.id}` : first.kind === 'plan' ? `/r/${roomId}/p/${first.id}` : `/r/${roomId}/b/${first.id}`;
+    const more = list.length - 1;
+    const base = first.kind === 'wish' ? `/r/${roomId}/w/${first.id}` : first.kind === 'plan' ? `/r/${roomId}/p/${first.id}`
+      : `/r/${roomId}/b/${first.kind === 'memo' ? first.bookId : first.id}`;
     toast(`${who}が${what()}${more > 0 ? `（ほか${more}件）` : ''}`, { action: '見る', onAction: () => go(base), duration: 6000 });
   }), []);
 }
@@ -62,7 +67,7 @@ export function App() {
     case 'wishEdit': page = html`<${WishEditor} key=${r.id ?? 'new'} roomId=${r.roomId} id=${r.id} query=${r.query} />`; break;
     case 'plan': page = html`<${PlanPage} roomId=${r.roomId} id=${r.id} />`; break;
     case 'planEdit': page = html`<${PlanEditor} key=${(r.id ?? 'new') + (r.query.date ?? '')} roomId=${r.roomId} id=${r.id} query=${r.query} />`; break;
-    case 'book': page = html`<${BookPage} roomId=${r.roomId} id=${r.id} />`; break;
+    case 'book': page = html`<${BookPage} roomId=${r.roomId} id=${r.id} query=${r.query} />`; break;
     case 'settings': page = html`<${Settings} roomId=${r.roomId} />`; break;
     default: page = rooms.length ? null : html`<${Welcome} />`;
   }

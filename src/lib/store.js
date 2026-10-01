@@ -121,7 +121,7 @@ export function getRoom(id) {
   if (snapCache.has(id)) return snapCache.get(id);
   const e = S.rooms.get(id);
   if (!e) return null;
-  const live = { member: [], wish: [], plan: [], book: [], note: [], like: [] };
+  const live = { member: [], wish: [], plan: [], book: [], note: [], like: [], memo: [] };
   for (const x of e.items.values()) {
     if (x.deleted || !live[x.kind]) continue;
     live[x.kind].push(x);
@@ -140,6 +140,7 @@ export function getRoom(id) {
     bookById: new Map(live.book.map((b) => [b.id, b])),
     notes: live.note,
     likes: live.like,
+    memos: live.memo.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),
     me: S.me.get(id) ?? null,
     seenBefore: S.seenBefore.get(id) ?? null,
   };
@@ -218,7 +219,7 @@ export function saveItem(roomId, x) {
   const t = nowIso();
   const prev = x.id ? e.items.get(x.id) : null;
   const me = getMe(roomId);
-  const prefix = { member: 'm', wish: 'w', plan: 'p', book: 'b' }[x.kind] ?? 'x';
+  const prefix = { member: 'm', wish: 'w', plan: 'p', book: 'b', memo: 'f' }[x.kind] ?? 'x';
   const xx = {
     ...prev,
     ...x,
