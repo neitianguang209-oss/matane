@@ -149,7 +149,7 @@ export function PlanEditor({ roomId, id, query }) {
             </div>`;
           })}
           <button class="list-item" onClick=${() => setPickOpen(true)} style=${{ color: 'var(--accent-deep)' }}>
-            <${Icon} name="heart" /><span class="grow bold">いつかリストから選ぶ</span><${Icon} name="chevronRight" size=${18} />
+            <${Icon} name="star" /><span class="grow bold">いつかリストから選ぶ</span><${Icon} name="chevronRight" size=${18} />
           </button>
           <div class="add-row">
             <input class="input grow" value=${text} placeholder="自由に書く（例：ランチ、買い物）" aria-label="やることを書く"
@@ -207,7 +207,7 @@ function WishPicker({ open, onClose, snap, today, chosen, onDone }) {
         <span class="box"><${Icon} name="check" stroke=${3} /></span>
         <span style=${{ fontSize: '20px' }}>${wishEmoji(w)}</span>
         <span class="grow"><span class="label-t" style=${{ display: 'block' }}>${w.title}</span>
-          <span class="tiny muted">${KINDS[w.type]?.label}${t.group === 'now' ? '・今がちょうどいい' : t.group === 'later' ? '・季節待ち' : ''}${both ? '・ふたりとも♡' : ''}</span></span>
+          <span class="tiny muted">${KINDS[w.type]?.label}${t.group === 'now' ? '・今がちょうどいい' : t.group === 'later' ? '・季節待ち' : ''}${both ? '・ふたりとも☆' : ''}</span></span>
       </button>`)}
     </div>` : html`<div class="empty small">${snap.wishes.length ? '見つかりませんでした' : 'いつかリストはまだ空です'}</div>`}
     <div style=${{ position: 'sticky', bottom: 0, background: 'var(--surface)', paddingTop: '10px' }}>

@@ -2,7 +2,7 @@ import { html, React } from '../lib/html.js';
 import { go, back } from '../lib/router.js';
 import { createRoom, importRoom } from '../lib/store.js';
 import { Icon } from './icons.js';
-import { Sheet, toast, TopBar, Avatar } from './components.js';
+import { Sheet, toast, TopBar, Avatar, Sparkles } from './components.js';
 
 const { useState, useRef } = React;
 
@@ -30,17 +30,18 @@ export function Welcome() {
   }
 
   return html`<div class="welcome">
-    <img class="logo" src="icons/icon-192.png" alt="" />
-    <h1>またね</h1>
-    <div class="lead">行きたいところ、やりたいこと、<br />次に会う日。ふたりで育てるノート。</div>
-
-    <div style=${{ margin: '30px 0 34px' }}>
+    <${Sky}>
+      <h1>またね</h1>
+      <div class="lead">行きたいところ、やりたいこと、<br />次に会う日。ふたりで育てるノート。</div>
+    <//>
+    <div class="body">
+    <div style=${{ margin: '4px 0 30px' }}>
       <div class="feat">
-        <div class="ic" style=${{ background: 'var(--accent-soft)' }}>🍁</div>
+        <div class="ic" style=${{ background: 'var(--star-soft)' }}>⭐</div>
         <div><div class="t">「いつか」を登録し合う</div><div class="s">思いついたら書いておくだけ。季節や期限で、今ちょうどいいものが上に来ます。</div></div>
       </div>
       <div class="feat">
-        <div class="ic" style=${{ background: '#fff4e0' }}>📅</div>
+        <div class="ic" style=${{ background: 'var(--accent-soft)' }}>📅</div>
         <div><div class="t">会う日と、その日にやること</div><div class="s">カレンダーで予定を共有。リストから「この日にやる」を選べます。</div></div>
       </div>
       <div class="feat">
@@ -50,7 +51,7 @@ export function Welcome() {
     </div>
 
     <div class="stack" style=${{ marginTop: 'auto' }}>
-      <button class="btn primary block" onClick=${() => go('/new')}><${Icon} name="plus" />ふたりの部屋をつくる</button>
+      <button class="btn accent block" onClick=${() => go('/new')}><${Icon} name="plus" />ふたりの部屋をつくる</button>
       <button class="btn block" onClick=${() => setJoinOpen(true)}><${Icon} name="link" />招待リンクで入る</button>
       <button class="btn ghost block small" onClick=${() => fileRef.current?.click()}><${Icon} name="upload" />バックアップから戻す</button>
       <input type="file" accept="application/json,.json" hidden ref=${fileRef} onChange=${onImport} />
@@ -58,7 +59,17 @@ export function Welcome() {
     <p class="tiny faint" style=${{ textAlign: 'center', marginTop: '18px', lineHeight: 1.7 }}>
       ログインは不要です。部屋のリンクを知っているふたりだけが見られます。
     </p>
+    </div>
     <${JoinSheet} open=${joinOpen} onClose=${() => setJoinOpen(false)} />
+  </div>`;
+}
+
+// はじめの画面の夜空（星がまたたき、下に虹）
+export function Sky({ children }) {
+  return html`<div class="sky">
+    <${Sparkles} kind="sky" />
+    <img class="logo" src="icons/icon-192.png" alt="" />
+    ${children}
   </div>`;
 }
 
@@ -111,7 +122,7 @@ export function CreateRoom() {
       つくったら、招待リンクをLINEで友だちに送ります。<br />リンクを開いた友だちが「自分はこっち」を選べば、同じ部屋を一緒に使えます。
     </p>
     <div class="bottom-bar"><div class="inner">
-      <button class="btn primary block" disabled=${!ok} onClick=${create}>部屋をつくる</button>
+      <button class="btn accent block" disabled=${!ok} onClick=${create}>部屋をつくる</button>
     </div></div>
   </div>`;
 }

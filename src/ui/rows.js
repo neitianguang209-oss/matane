@@ -67,11 +67,11 @@ export function WishRow({ snap, w, today, faded = false }) {
     </button>
     <span class="right">
       ${both
-        ? html`<span class="both" title="ふたりとも"><${Icon} name="heart" size=${14} fill=${true} />ふたりとも</span>`
+        ? html`<span class="both" title="ふたりとも"><${Icon} name="star" size=${14} fill=${true} />ふたりとも</span>`
         : mine || !snap.me
           ? html`<${Avatar} m=${author} size="xs" />`
           : html`<button class=${'heart-btn' + (liked ? ' on' : '')} aria-pressed=${liked} aria-label="私も！"
-              onClick=${() => toggleLike(snap, w)}><${Icon} name="heart" fill=${liked} /></button>`}
+              onClick=${() => toggleLike(snap, w)}><${Icon} name="star" fill=${liked} /></button>`}
       ${both || mine ? null : html`<${Avatar} m=${author} size="xs" />`}
     </span>
   </div>`;
@@ -88,7 +88,7 @@ export function WishTile({ snap, w, today }) {
     <span class="tt clamp2">${w.title}</span>
     <span class="meta">
       ${t.urgent ? html`<span class="badge warn">あと${t.left}日</span>` : null}
-      ${both ? html`<span class="both"><${Icon} name="heart" size=${13} fill=${true} />ふたりとも</span>` : html`<${Avatar} m=${author} size="xs" />`}
+      ${both ? html`<span class="both"><${Icon} name="star" size=${13} fill=${true} />ふたりとも</span>` : html`<${Avatar} m=${author} size="xs" />`}
     </span>
   </button>`;
 }

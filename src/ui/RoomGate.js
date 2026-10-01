@@ -6,7 +6,8 @@ import { inviteUrl, lineShareUrl } from '../lib/share.js';
 import qrcode from 'qrcode-generator';
 import { useRoom, useOnline } from './hooks.js';
 import { Icon } from './icons.js';
-import { Avatar, Sheet, toast, copyText, TopBar } from './components.js';
+import { Avatar, Sheet, toast, copyText, TopBar, celebrate } from './components.js';
+import { Sky } from './Welcome.js';
 
 const { useEffect, useState } = React;
 
@@ -36,10 +37,12 @@ export function RoomGate({ roomId, children }) {
 
 function WhoAmI({ snap }) {
   return html`<div class="welcome">
-    <img class="logo" src="icons/icon-192.png" alt="" />
-    <h1 style=${{ fontSize: '26px' }}>ようこそ！</h1>
-    <div class="lead">${snap.members.map((m) => m.placeholder ? '?' : m.name).join(' と ')} の部屋です。<br />あなたはどっち？</div>
-    <div class="who-pick" style=${{ marginTop: '28px' }}>
+    <${Sky}>
+      <h1 style=${{ fontSize: '26px' }}>ようこそ！</h1>
+      <div class="lead">${snap.members.map((m) => m.placeholder ? '?' : m.name).join(' と ')} の部屋です。<br />あなたはどっち？</div>
+    <//>
+    <div class="body">
+    <div class="who-pick">
       ${snap.members.map((m) => html`<button key=${m.id} onClick=${() => setMe(snap.id, m.id)}>
         <${Avatar} m=${m.placeholder ? { ...m, name: '?' } : m} size="xl" />
         ${m.placeholder ? '名前を入れる' : m.name}
@@ -49,6 +52,7 @@ function WhoAmI({ snap }) {
     <p class="tiny faint" style=${{ textAlign: 'center', marginTop: 'auto', paddingTop: '24px', lineHeight: 1.7 }}>
       選んだ人はこの端末に覚えておきます（設定からいつでも変えられます）。
     </p>
+    </div>
   </div>`;
 }
 
@@ -59,18 +63,20 @@ function NameYourself({ snap, m }) {
     if (!name.trim()) return;
     saveItem(snap.id, { ...m, name: name.trim(), placeholder: false });
     toast(`ようこそ、${name.trim()}！`);
+    celebrate();
   }
   return html`<div class="welcome">
-    <img class="logo" src="icons/icon-192.png" alt="" />
-    <h1 style=${{ fontSize: '26px' }}>はじめまして</h1>
-    <div class="lead">${other ? `${other.name}が部屋をつくって待ってるよ。` : ''}<br />あなたの名前を教えてね。</div>
+    <${Sky}>
+      <h1 style=${{ fontSize: '26px' }}>はじめまして</h1>
+      <div class="lead">${other ? `${other.name}が部屋をつくって待ってるよ。` : ''}<br />あなたの名前を教えてね。</div>
+    <//>
     <div class="stack" style=${{ marginTop: '26px' }}>
       <div class="row">
         <${Avatar} m=${{ ...m, name: name || '?' }} size="lg" />
         <input class="input grow" placeholder="あなたの名前" value=${name} autoFocus aria-label="あなたの名前"
           onInput=${(e) => setName(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && save()} />
       </div>
-      <button class="btn primary block" disabled=${!name.trim()} onClick=${save}>はじめる</button>
+      <button class="btn accent block" disabled=${!name.trim()} onClick=${save}>はじめる</button>
       <button class="link-btn" style=${{ alignSelf: 'center' }} onClick=${() => setMe(snap.id, null)}>選びなおす</button>
     </div>
   </div>`;

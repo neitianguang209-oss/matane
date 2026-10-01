@@ -6,7 +6,7 @@ import { groupWishes, upcomingPlans, plansToReview, bookQueue, nextPicker, bookC
 import { noteId } from '../lib/ids.js';
 import { useToday, usePair } from './hooks.js';
 import { Icon } from './icons.js';
-import { Cover, Progress, toast } from './components.js';
+import { Cover, Progress, toast, Sparkles, celebrate } from './components.js';
 import { WishTile, wishEmoji, isNewFromOther, KINDS } from './rows.js';
 
 const { useState } = React;
@@ -30,7 +30,7 @@ export function HomeTab({ snap, headerRight, ui }) {
   return html`<div>
     <header class="home-head">
       <img class="logo" src="icons/icon-192.png" alt="" />
-      <div class="name grow">またね</div>
+      <div class="name grow"><span>またね</span></div>
       ${headerRight}
     </header>
 
@@ -61,8 +61,9 @@ export function HomeTab({ snap, headerRight, ui }) {
 
     <${SeasonSection} snap=${snap} groups=${groups} season=${season} today=${today} />
     <button class="dice-btn" onClick=${ui.openDice}>
-      <span class="ic">🎲</span>
-      <span class="grow"><span class="t" style=${{ display: 'block' }}>迷ったら、おまかせ</span><span class="s">いつかリストから今日やることを1つ選ぶよ</span></span>
+      <${Sparkles} kind="small" />
+      <span class="ic">🌠</span>
+      <span class="grow"><span class="t" style=${{ display: 'block' }}>迷ったら、流れ星におまかせ</span><span class="s">いつかリストから今日やることを1つ選ぶよ</span></span>
       <${Icon} name="chevronRight" size=${18} />
     </button>
 
@@ -90,7 +91,7 @@ function NextHero({ snap, upcoming, today, other }) {
   const p = upcoming[0];
   if (!p) {
     return html`<button class="hero empty-hero" onClick=${() => go(`/r/${snap.id}/p/new`)}>
-      <div style=${{ fontSize: '34px' }}>📅</div>
+      <div style=${{ fontSize: '34px' }}>🌈</div>
       <div class="round bold" style=${{ fontSize: '17px', marginTop: '4px' }}>次に会う日を決めよう</div>
       <div class="small muted" style=${{ marginTop: '2px' }}>${other?.name ? `${other.name}と` : ''}次に会う日と、やりたいことを入れておけます</div>
       <span class="btn primary small" style=${{ marginTop: '12px' }}><${Icon} name="calendarPlus" />日にちを入れる</span>
@@ -104,6 +105,7 @@ function NextHero({ snap, upcoming, today, other }) {
   const second = upcoming[1];
   return html`<div>
     <button class="hero" onClick=${() => go(`/r/${snap.id}/p/${p.id}`)}>
+      <${Sparkles} kind="hero" />
       <span class=${'count' + (cd.n <= 0 ? ' today' : '')}>${ongoing ? '今日も！' : cd.text}</span>
       <div class="kicker"><${Icon} name="calendar" size=${14} />次に会う日</div>
       <div class="when">
@@ -157,6 +159,7 @@ export function ReviewCard({ snap, p, ui, embedded = false }) {
     if (p.bookClub && book) {
       if (!skip && checked.__book && !book.doneAt) { saveItem(snap.id, { ...book, doneAt: p.date }); bookDone = true; }
     }
+    if (!skip && (wishDone || bookDone || todos.some((t) => checked[t.id]))) celebrate();
     saveItem(snap.id, {
       ...p,
       reviewed: true,
@@ -227,14 +230,14 @@ export function ClubCard({ snap, today, ui }) {
   </div>`;
 }
 
-export function MonthDots({ clubs, goal, today }) {
+export function MonthDots({ clubs, goal, today, night = false }) {
   const n = Math.max(goal, clubs.length);
   const dots = [];
   for (let i = 0; i < n; i++) {
     const c = clubs[i];
     dots.push(html`<i key=${i} class=${c ? (c.date < today ? 'held' : 'set') : ''}></i>`);
   }
-  return html`<span class="month-dots" aria-label=${`今月 ${clubs.length}回／目標${goal}回`}>${dots}<span>${clubs.length}/${goal}回</span></span>`;
+  return html`<span class=${"month-dots" + (night ? " on-night" : "")} aria-label=${`今月 ${clubs.length}回／目標${goal}回`}>${dots}<span>${clubs.length}/${goal}回</span></span>`;
 }
 
 export function PickCta({ title, sub, onClick }) {
@@ -273,7 +276,7 @@ function SeasonSection({ snap, groups, season, today }) {
   if (!list.length) {
     return html`<h2 class="section">${season.emoji} いつかやりたいこと</h2>
       <button class="hero empty-hero" onClick=${() => go(`/r/${snap.id}/w/new`)}>
-        <div style=${{ fontSize: '30px' }}>📝</div>
+        <div style=${{ fontSize: '30px' }}>🌟</div>
         <div class="round bold" style=${{ fontSize: '16px', marginTop: '4px' }}>行きたいところ・やりたいことを書こう</div>
         <div class="small muted">${season.label}にやりたいこと、期間限定のイベント、いつか行きたいお店…</div>
       </button>`;

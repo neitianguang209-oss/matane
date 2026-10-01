@@ -6,7 +6,7 @@ import { planEnd, planTitle, bookQueue } from '../lib/logic.js';
 import { googleCalendarUrl, icsText, lineText, lineShareUrl, downloadFile, mapsUrl } from '../lib/share.js';
 import { useRoom, useToday } from './hooks.js';
 import { Icon } from './icons.js';
-import { TopBar, Cover, Progress, toast, copyText } from './components.js';
+import { TopBar, Cover, Progress, toast, copyText, Sparkles, celebrate } from './components.js';
 import { wishEmoji } from './rows.js';
 import { ReviewCard, noteOf } from './HomeTab.js';
 
@@ -28,6 +28,7 @@ export function PlanPage({ roomId, id }) {
   function toggleTodo(t) {
     const done = !t.done;
     saveItem(roomId, { ...p, todos: todos.map((x) => (x.id === t.id ? { ...x, done } : x)) });
+    if (done) celebrate();
     if (t.wishId) {
       const w = snap.wishById.get(t.wishId);
       if (w && done && !w.doneAt) saveItem(roomId, { ...w, doneAt: p.date, donePlanId: p.id });
@@ -47,6 +48,7 @@ export function PlanPage({ roomId, id }) {
     <//>
 
     <div class=${'plan-hero' + (p.bookClub && !todos.length ? ' book' : '')}>
+      <${Sparkles} kind=${p.bookClub && !todos.length ? 'night' : 'hero'} />
       <div class="dt">${fmtLong(p.date, { year: p.date.slice(0, 4) !== today.slice(0, 4) })}${p.endDate && p.endDate !== p.date ? `〜${fmtDate(p.endDate)}` : ''}${p.time ? `  ${p.time}〜` : ''}</div>
       <h1 class="ttl">${planTitle(p, snap)}</h1>
       <span class=${'cd' + (cd.n === 0 ? ' today' : '')}>${past ? (p.reviewed ? 'おわった日' : 'おわった日・どうだった？') : cd.text}</span>

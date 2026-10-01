@@ -1,10 +1,10 @@
-// 迷ったらおまかせ：いつかリストから1つ選ぶ（今の季節・いつでもできるものから）
+// 流れ星におまかせ：いつかリストから1つ選ぶ（今の季節・いつでもできるものから）
 import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
 import { groupWishes } from '../lib/logic.js';
 import { useToday } from './hooks.js';
 import { Icon } from './icons.js';
-import { Sheet, Seg } from './components.js';
+import { Sheet, Seg, Sparkles, celebrate } from './components.js';
 import { wishEmoji, KINDS } from './rows.js';
 import { AddToPlanSheet } from './WishPage.js';
 
@@ -38,26 +38,28 @@ export function DiceSheet({ open, onClose, snap }) {
       const pick = weighted[Math.floor(Math.random() * weighted.length)];
       setCur(pick);
       n++;
-      if (n >= total) { setPhase('landed'); return; }
+      if (n >= total) { setPhase('landed'); celebrate(); return; }
       timer.current = setTimeout(step, 45 + n * n * 1.3);   // だんだんゆっくり
     };
     step();
   }
 
   const w = cur?.w;
-  return html`<${Sheet} open=${open} onClose=${onClose} title="迷ったら、おまかせ">
+  return html`<${Sheet} open=${open} onClose=${onClose} title="流れ星におまかせ">
     <div class="stack">
       <${Seg} small=${true} value=${type} onChange=${(v) => { setType(v); setPhase('idle'); setCur(null); }} label="種類"
         options=${[{ value: 'all', label: 'なんでも' }, { value: 'go', label: '📍 行きたい' }, { value: 'do', label: '✨ やりたい' }]} />
       <div class=${'dice-stage ' + phase} aria-live="polite">
+        <${Sparkles} kind="night" />
+        ${phase === 'landed' ? html`<div class="tiny bold" style=${{ color: '#ffe69a', letterSpacing: '.1em' }}>今日はこれ！</div>` : null}
         ${w ? html`
           <div class="em">${wishEmoji(w)}</div>
           <div class="tt">${w.title}</div>
-          ${phase === 'landed' ? html`<div class="small muted">${KINDS[w.type]?.long}${w.area ? `・${w.area}` : ''}${cur.both ? '・ふたりとも♡' : ''}</div>` : null}
+          ${phase === 'landed' ? html`<div class="small muted">${KINDS[w.type]?.long}${w.area ? `・${w.area}` : ''}${cur.both ? '・ふたりとも☆' : ''}</div>` : null}
         ` : weighted.length ? html`
-          <div class="em">🎲</div>
+          <div class="em">🌠</div>
           <div class="tt">今日なにする？</div>
-          <div class="small muted">${pool.length}個の中から選ぶよ（今の季節・いつでもできるもの）</div>
+          <div class="small muted">流れ星が ${pool.length}個の中から選ぶよ<br />（今の季節・いつでもできるもの。☆ふたりとも は当たりやすい）</div>
         ` : html`
           <div class="em">📝</div>
           <div class="tt">候補がありません</div>
@@ -66,11 +68,11 @@ export function DiceSheet({ open, onClose, snap }) {
       </div>
       ${phase === 'landed' && w ? html`<div class="row">
         <button class="btn grow" onClick=${() => { onClose(); go(`/r/${snap.id}/w/${w.id}`); }}>くわしく</button>
-        <button class="btn primary grow" onClick=${() => setPlanOpen(true)}><${Icon} name="calendarPlus" />この日にやる</button>
+        <button class="btn accent grow" onClick=${() => setPlanOpen(true)}><${Icon} name="calendarPlus" />この日にやる</button>
       </div>
       <button class="btn ghost block" onClick=${roll}><${Icon} name="refresh" />もう一回</button>` : html`
-      <button class="btn primary block" disabled=${!weighted.length || phase === 'rolling'} onClick=${roll}>
-        ${phase === 'rolling' ? '選んでいます…' : html`<span style=${{ fontSize: '18px' }}>🎲</span>選んでもらう`}
+      <button class="btn accent block" disabled=${!weighted.length || phase === 'rolling'} onClick=${roll}>
+        ${phase === 'rolling' ? '流れ星が選んでいます…' : html`<span style=${{ fontSize: '18px' }}>🌠</span>流れ星にきく`}
       </button>`}
     </div>
     ${w ? html`<${AddToPlanSheet} open=${planOpen} onClose=${() => { setPlanOpen(false); onClose(); }} snap=${snap} wish=${w} today=${today} />` : null}

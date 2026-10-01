@@ -17,7 +17,7 @@ const { useState, useEffect } = React;
 
 const TABS = [
   { id: 'home', label: 'ホーム', icon: 'home' },
-  { id: 'wish', label: 'いつか', icon: 'heart' },
+  { id: 'wish', label: 'いつか', icon: 'star' },
   { id: 'cal', label: 'カレンダー', icon: 'calendar' },
   { id: 'book', label: '読書会', icon: 'book' },
 ];
@@ -97,6 +97,6 @@ function AddMenu({ open, onClose, base, onBook, onDice }) {
     ${item('📍', 'var(--accent-soft)', '行きたいところ・やりたいこと', 'いつかリストに入れておく', () => { onClose(); go(base + '/w/new'); })}
     ${item('📅', '#fff4e0', '会う日', '日にちと、その日にやること', () => { onClose(); go(base + '/p/new'); })}
     ${item('📚', 'var(--book-soft)', '読書会の本', '次回・次々回に読む本', onBook)}
-    ${item('🎲', 'var(--surface-2)', '迷ったらおまかせ', 'いつかリストから1つ選んでもらう', onDice)}
+    ${item('🌠', 'linear-gradient(135deg, var(--night), var(--night-2))', '流れ星におまかせ', '迷ったら、いつかリストから1つ選んでもらう', onDice)}
   <//>`;
 }

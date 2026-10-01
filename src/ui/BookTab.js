@@ -4,7 +4,7 @@ import { monthKey, monthOf, fmtDate } from '../lib/dates.js';
 import { bookQueue, nextPicker, bookClubsInMonth, planForBook } from '../lib/logic.js';
 import { useToday } from './hooks.js';
 import { Icon } from './icons.js';
-import { TopBar, Cover, Progress } from './components.js';
+import { TopBar, Cover, Progress, Sparkles } from './components.js';
 import { MonthDots, PickCta, noteOf } from './HomeTab.js';
 
 export function BookTab({ snap, headerRight, ui }) {
@@ -21,19 +21,20 @@ export function BookTab({ snap, headerRight, ui }) {
   return html`<div>
     <${TopBar} title="読書会" sub=${`月${goal}回・同じ本を読んで語る`}>${headerRight}<//>
 
-    <div class="club-card" style=${{ background: 'linear-gradient(150deg, #f4faf6, #e2f1e8)', borderColor: 'var(--book-soft-2)' }}>
+    <div class="night-card">
+      <${Sparkles} kind="night" />
       <div class="club-head">
-        <span class="t">${monthOf(today)}月の読書会</span>
-        <${MonthDots} clubs=${clubs} goal=${goal} today=${today} />
+        <span class="t" style=${{ color: '#fff' }}>${monthOf(today)}月の読書会</span>
+        <${MonthDots} clubs=${clubs} goal=${goal} today=${today} night=${true} />
       </div>
-      <div class="round bold" style=${{ fontSize: '18px', margin: '10px 0 4px' }}>
-        ${left ? `あと${left}回、日にちを決めよう` : '今月の分、決まり！'}
+      <div class="round bold" style=${{ fontSize: '19px', margin: '10px 0 6px' }}>
+        ${left ? `あと${left}回、日にちを決めよう` : '今月の分、決まり！ ✦'}
       </div>
       ${clubs.length ? html`<div class="row wrap" style=${{ gap: '6px' }}>
-        ${clubs.map((p) => html`<button key=${p.id} class="badge book" style=${{ border: 0, padding: '3px 10px', fontSize: '12.5px' }} onClick=${() => go(`${base}/p/${p.id}`)}>
-          ${p.date < today ? '✓ ' : ''}${fmtDate(p.date)}</button>`)}
+        ${clubs.map((p) => html`<button key=${p.id} class="night-chip" onClick=${() => go(`${base}/p/${p.id}`)}>
+          ${p.date < today ? '★ ' : '☆ '}${fmtDate(p.date)}</button>`)}
       </div>` : null}
-      ${left ? html`<button class="btn book small" style=${{ marginTop: '12px' }} onClick=${() => go(`${base}/p/new?club=1`)}>
+      ${left ? html`<button class="btn star small" style=${{ marginTop: '14px' }} onClick=${() => go(`${base}/p/new?club=1`)}>
         <${Icon} name="calendarPlus" />読書会の日を決める</button>` : null}
     </div>
 

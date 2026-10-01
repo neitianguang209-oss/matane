@@ -7,7 +7,7 @@ import { wishTiming, wantersOf, plansWithWish, upcomingPlans, planTitle, seasonL
 import { mapsUrl } from '../lib/share.js';
 import { useRoom, useToday, usePair } from './hooks.js';
 import { Icon } from './icons.js';
-import { Avatar, Sheet, TopBar, toast, SeasonBadge } from './components.js';
+import { Avatar, Sheet, TopBar, toast, SeasonBadge, celebrate } from './components.js';
 import { KINDS, wishEmoji, toggleLike, likedByMe } from './rows.js';
 
 const { useState } = React;
@@ -35,6 +35,7 @@ export function WishPage({ roomId, id }) {
   function markDone() {
     const prev = { doneAt: w.doneAt ?? null, donePlanId: w.donePlanId ?? null };
     saveItem(roomId, { ...w, doneAt: todayStr(), donePlanId: null });
+    celebrate();
     toast('やったね！「やったこと」に入れたよ', { action: '元に戻す', onAction: () => { const cur = getItem(roomId, w.id); if (cur) saveItem(roomId, { ...cur, ...prev }); } });
   }
   function undoDone() {
@@ -71,13 +72,13 @@ export function WishPage({ roomId, id }) {
       <div style=${{ marginTop: '12px' }}>
         ${both
           ? html`<div class="note" style=${{ background: 'var(--like-soft)', color: 'var(--like)', fontWeight: 700 }}>
-              <${Icon} name="heart" fill=${true} /><div class="grow">ふたりとも${verb}！</div>
+              <${Icon} name="star" fill=${true} /><div class="grow">ふたりとも${verb}！</div>
               ${!mine ? html`<button class="link-btn" style=${{ color: 'var(--like)' }} onClick=${() => toggleLike(snap, w)}>取り消す</button>` : null}
             </div>`
           : mine
-            ? html`<div class="note"><${Icon} name="heart" /><div class="grow">${other?.name ?? '相手'}が ♡ を押すと「ふたりとも」になります</div></div>`
+            ? html`<div class="note"><${Icon} name="star" /><div class="grow">${other?.name ?? '相手'}が ☆ を押すと「ふたりとも」になります</div></div>`
             : html`<button class="btn block" style=${{ borderColor: 'var(--like)', color: 'var(--like)' }} onClick=${() => toggleLike(snap, w)} aria-pressed=${liked}>
-                <${Icon} name="heart" fill=${liked} />私も${verb}！
+                <${Icon} name="star" fill=${liked} />私も${verb}！
               </button>`}
       </div>
     </div>
@@ -113,8 +114,8 @@ export function WishPage({ roomId, id }) {
     <p class="tiny faint" style=${{ textAlign: 'center', marginTop: '20px' }}>いつ：${seasonLabel(w.seasons)}${w.until ? `（${fmtDate(w.until)}まで）` : ''}</p>
 
     ${!w.doneAt ? html`<div class="bottom-bar"><div class="inner">
-      <button class="btn grow" onClick=${markDone}><${Icon} name="check" />やった！</button>
-      <button class="btn primary grow" onClick=${() => setPlanOpen(true)}><${Icon} name="calendarPlus" />この日にやる</button>
+      <button class="btn grow" onClick=${markDone}><${Icon} name="star" />やった！</button>
+      <button class="btn accent grow" onClick=${() => setPlanOpen(true)}><${Icon} name="calendarPlus" />この日にやる</button>
     </div></div>` : null}
 
     <${AddToPlanSheet} open=${planOpen} onClose=${() => setPlanOpen(false)} snap=${snap} wish=${w} today=${today} />

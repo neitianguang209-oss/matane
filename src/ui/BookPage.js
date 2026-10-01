@@ -7,7 +7,7 @@ import { bookQueue, planForBook, nextPicker } from '../lib/logic.js';
 import { calilUrl, amazonUrl } from '../lib/books.js';
 import { useRoom, useToday } from './hooks.js';
 import { Icon } from './icons.js';
-import { TopBar, Cover, Avatar, Sheet, toast, confirmDialog, memberColor } from './components.js';
+import { TopBar, Cover, Avatar, Sheet, toast, confirmDialog, memberColor, celebrate } from './components.js';
 import { noteOf } from './HomeTab.js';
 
 const { useState, useEffect, useRef } = React;
@@ -32,6 +32,7 @@ export function BookPage({ roomId, id }) {
   function finish() {
     const d = plan && plan.date <= today ? plan.date : todayStr();
     saveItem(roomId, { ...b, doneAt: d });
+    celebrate();
     const rest = q.queue.filter((x) => x.id !== b.id).length;
     if (rest < 2) {
       const p = snap.memberById.get(nextPicker(snap.books, snap.members));

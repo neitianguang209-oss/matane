@@ -75,6 +75,52 @@ export function SeasonBadge({ id }) {
   return html`<span class="badge season" style=${{ '--c': `var(--${id})`, '--cs': `var(--${id}-soft)` }}>${s.emoji} ${s.label}</span>`;
 }
 
+// ---------------------------------------------------------------------
+// 星と虹
+// ---------------------------------------------------------------------
+export const RAINBOW = ['#e2462a', '#f28a26', '#f5c330', '#3fae6e', '#3a84d4', '#7457cc'];
+const SPARK = 'M12 2c.7 5.3 2.7 7.3 8 8v.1c-5.3.7-7.3 2.7-8 8h-.1c-.7-5.3-2.7-7.3-8-8V10c5.3-.7 7.3-2.7 8-8z';
+// [左, 上, 大きさ(px), またたきの遅れ(秒), 色]
+const SPARKS = {
+  hero: [['78%', '58%', 14, 0], ['88%', '36%', 9, 1.2], ['62%', '18%', 8, 2.1]],
+  night: [['91%', '56%', 13, 0], ['78%', '80%', 8, 1.6, '#ffe69a'], ['46%', '7%', 6, 1.1, '#fff'], ['64%', '44%', 7, 2.4, '#fff'], ['6%', '86%', 7, .8, '#ffe69a']],
+  sky: [['10%', '14%', 12, 0, '#ffe69a'], ['84%', '12%', 18, .7], ['72%', '46%', 9, 1.5, '#fff'], ['90%', '70%', 8, 2.2, '#ffe69a'], ['40%', '8%', 7, 1.1, '#fff'], ['58%', '30%', 6, 2.8, '#fff']],
+  small: [['82%', '22%', 12, 0], ['90%', '62%', 8, 1.3, '#ffe69a']],
+};
+export function Sparkles({ kind = 'hero' }) {
+  return html`<span class="sparkles" aria-hidden="true">
+    ${(SPARKS[kind] ?? SPARKS.hero).map(([x, y, s, d, c], i) => html`<svg key=${i} viewBox="0 0 24 24" width=${s} height=${s}
+      style=${{ left: x, top: y, animationDelay: d + 's', color: c }}><path d=${SPARK} fill="currentColor" /></svg>`)}
+  </span>`;
+}
+
+// やった！のときに、星と虹色の紙ふぶきを飛ばす
+export function celebrate() {
+  try {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const root = document.createElement('div');
+    root.className = 'burst';
+    root.setAttribute('aria-hidden', 'true');
+    const n = 24;
+    for (let i = 0; i < n; i++) {
+      const el = document.createElement('span');
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.3;
+      const dist = 90 + Math.random() * 90;
+      const kind = i % 3;
+      if (kind === 2) el.className = 'd';
+      else el.textContent = kind === 0 ? '★' : '✦';
+      el.style.color = kind === 2 ? RAINBOW[i % RAINBOW.length] : i % 2 ? '#f5b014' : RAINBOW[i % RAINBOW.length];
+      el.style.setProperty('--dx', Math.cos(a) * dist + 'px');
+      el.style.setProperty('--dy', Math.sin(a) * dist + 40 + 'px');
+      el.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
+      el.style.fontSize = 14 + Math.random() * 12 + 'px';
+      root.appendChild(el);
+    }
+    document.body.appendChild(root);
+    setTimeout(() => root.remove(), 1300);
+  } catch { /* 飾りなので失敗しても何もしない */ }
+}
+
 // 本の表紙：候補URLを順に試し、どれもダメなら色つきの仮の表紙
 const PH_COLORS = ['#2b7a5c', '#3b5f9e', '#9a4a6e', '#8a6420', '#4d5b8f', '#6d4b8f', '#2f7f86', '#a3532e'];
 function hashColor(s) {

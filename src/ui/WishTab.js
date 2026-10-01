@@ -54,9 +54,9 @@ export function WishTab({ snap, headerRight }) {
     <div class="filter-row" style=${{ marginTop: '10px' }}>
       <${Seg} small=${true} value=${kind} onChange=${setKind} label="種類"
         options=${[{ value: 'all', label: 'すべて' }, { value: 'go', label: '📍 行きたい' }, { value: 'do', label: '✨ やりたい' }]} />
-      <button class=${'toggle-chip' + (bothOnly ? ' on' : '')} aria-pressed=${bothOnly} aria-label="ふたりとも♡のものだけ" title="ふたりとも♡のものだけ"
+      <button class=${'toggle-chip' + (bothOnly ? ' on' : '')} aria-pressed=${bothOnly} aria-label="ふたりとも☆のものだけ" title="ふたりとも☆のものだけ"
         onClick=${() => setBothOnly(!bothOnly)}>
-        <${Icon} name="heart" fill=${bothOnly} />${bothOnly ? 'ふたりとも' : null}
+        <${Icon} name="star" fill=${bothOnly} />${bothOnly ? 'ふたりとも' : null}
       </button>
     </div>
 
@@ -72,12 +72,12 @@ export function WishTab({ snap, headerRight }) {
     ${section('⏳ いつでも', null, pick(groups.anytime))}
     ${section('📆 季節待ち', '近い順', pick(groups.later))}
     ${bothOnly && !pick([...groups.now, ...groups.anytime, ...groups.later]).length && active ? html`<div class="empty small">
-      まだ「ふたりとも」のものはありません。<br />相手が追加したものに ♡ を押すと「ふたりとも」になります。
+      まだ「ふたりとも」のものはありません。<br />相手が追加したものに ☆ を押すと「ふたりとも」になります。
     </div>` : null}
     ${collapsible('✓ やったこと', openDone, setOpenDone, groups.done, false)}
     ${collapsible('期限が過ぎたもの', openExpired, setOpenExpired, groups.expired, true)}
     ${active ? html`<p class="tiny faint" style=${{ textAlign: 'center', marginTop: '22px', lineHeight: 1.7 }}>
-      相手が追加したものに ♡ を押すと「ふたりとも」に。<br />季節と期限から、今ちょうどいいものが上に来ます。
+      相手が追加したものに ☆ を押すと「ふたりとも」に。<br />季節と期限から、今ちょうどいいものが上に来ます。
     </p>` : null}
   </div>`;
 }
