@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>またね テスト</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; background: #fff; color: #1f1d1a; }
+    .ok { color: #1f8a4c; } .ng { color: #c93a39; font-weight: 700; }
+    li { margin: 2px 0; font-size: 14px; }
+    #sum { font-size: 18px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div id="sum">実行中…</div>
+  <ul id="out"></ul>
+  <script type="module">
+    import * as D from './src/lib/dates.js';
+    import * as L from './src/lib/logic.js';
+    import { guessEmoji } from './src/lib/emoji.js';
+    import { normalizeIsbn } from './src/lib/books.js';
+
+    const out = document.getElementById('out');
+    let pass = 0, fail = 0;
+    function t(name, fn) {
+      try {
+        fn();
+        pass++;
+        out.insertAdjacentHTML('beforeend', `<li class="ok">✓ ${name}</li>`);
+      } catch (e) {
+        fail++;
+        out.insertAdjacentHTML('beforeend', `<li class="ng">✗ ${name} — ${e.message}</li>`);
+      }
+    }
+    const eq = (a, b) => { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error(`${x} ≠ ${y}`); };
+
+    // ---- 日付 ----
+    t('addDays 月またぎ', () => eq(D.addDays('2026-10-31', 1), '2026-11-01'));
+    t('addDays 年またぎ', () => eq(D.addDays('2026-12-31', 1), '2027-01-01'));
+    t('diffDays', () => eq(D.diffDays('2026-10-02', '2026-10-05'), 3));
+    t('diffDays 逆', () => eq(D.diffDays('2026-10-05', '2026-10-02'), -3));
+    t('fmtDate', () => eq(D.fmtDate('2026-10-04'), '10/4（日）'));
+    t('fmtLong', () => eq(D.fmtLong('2026-10-02'), '10月2日（金）'));
+    t('fmtRange 同じ月', () => eq(D.fmtRange('2026-10-10', '2026-10-12'), '10/10（土）〜12日（月）'));
+    t('countdown 今日', () => eq(D.countdown('2026-10-02', '2026-10-02').text, '今日！'));
+    t('countdown 明日', () => eq(D.countdown('2026-10-03', '2026-10-02').text, '明日'));
+    t('countdown あと5日', () => eq(D.countdown('2026-10-07', '2026-10-02').text, 'あと5日'));
+    t('monthGrid 2026年10月は5週', () => {
+      const g = D.monthGrid(2026, 10);
+      eq(g.length, 5);
+      eq(g[0][0].date, '2026-09-27');
+      eq(g[0][4].date, '2026-10-01');
+      eq(g[4][6].date, '2026-10-31');
+    });
+    t('monthGrid 2026年2月（1日が日曜・4週）', () => eq(D.monthGrid(2026, 2).length, 4));
+    t('monthGrid 2027年2月（1日が月曜・5週）', () => eq(D.monthGrid(2027, 2).length, 5));
+    t('seasonOfMonth', () => eq([1, 3, 6, 9, 12].map(D.seasonOfMonth), ['winter', 'spring', 'summer', 'autumn', 'winter']));
+    t('daysUntilSeason 今の季節は0', () => eq(D.daysUntilSeason('autumn', '2026-10-02'), 0));
+    t('daysUntilSeason 冬まで', () => eq(D.daysUntilSeason('winter', '2026-10-02'), 60));
+    t('daysUntilSeason 春は来年', () => eq(D.daysUntilSeason('spring', '2026-10-02'), D.diffDays('2026-10-02', '2027-03-01')));
+    t('daysUntilSeason 1月から見た春', () => eq(D.daysUntilSeason('spring', '2027-01-15'), D.diffDays('2027-01-15', '2027-03-01')));
+
+    // ---- いつかの並び ----
+    const today = '2026-10-02';
+    const W = (o) => ({ id: o.id, title: o.id, createdAt: o.c ?? '2026-09-01T00:00:00Z', createdBy: o.by ?? 'A', seasons: o.s ?? [], until: o.u ?? null, doneAt: o.d ?? null });
+    t('wishTiming 今の季節', () => eq(L.wishTiming(W({ id: 'a', s: ['autumn'] }), today).group, 'now'));
+    t('wishTiming いつでも', () => eq(L.wishTiming(W({ id: 'a' }), today).group, 'anytime'));
+    t('wishTiming 季節待ち（冬）', () => {
+      const r = L.wishTiming(W({ id: 'a', s: ['winter'] }), today);
+      eq([r.group, r.next, r.wait], ['later', 'winter', 60]);
+    });
+    t('wishTiming 期限が近いと季節に関係なく今', () => eq(L.wishTiming(W({ id: 'a', s: ['spring'], u: '2026-10-20' }), today).group, 'now'));
+    t('wishTiming 期限切れ', () => eq(L.wishTiming(W({ id: 'a', u: '2026-09-30' }), today).group, 'expired'));
+    t('wishTiming やった', () => eq(L.wishTiming(W({ id: 'a', d: '2026-09-01' }), today).group, 'done'));
+    t('wishTiming 期限が遠いいつでも', () => eq(L.wishTiming(W({ id: 'a', u: '2026-12-25' }), today).group, 'anytime'));
+    t('groupWishes 期限が近い順→ふたりとも→新しい順', () => {
+      const ws = [W({ id: 'x', s: ['autumn'], c: '2026-09-03' }), W({ id: 'y', s: ['autumn'], c: '2026-09-01' }), W({ id: 'z', u: '2026-10-10' })];
+      const likes = [{ wishId: 'y', memberId: 'B' }];
+      const g = L.groupWishes(ws, { likes, memberCount: 2, today });
+      eq(g.now.map((x) => x.w.id), ['z', 'y', 'x']);
+      eq(g.now[1].both, true);
+    });
+    t('groupWishes 季節待ちは近い順', () => {
+      const ws = [W({ id: 'spring', s: ['spring'] }), W({ id: 'winter', s: ['winter'] }), W({ id: 'summer', s: ['summer'] })];
+      eq(L.groupWishes(ws, { today }).later.map((x) => x.w.id), ['winter', 'spring', 'summer']);
+    });
+
+    // ---- 会う日 ----
+    const P = (id, date, o = {}) => ({ id, date, ...o });
+    const plans = [P('p1', '2026-09-20', { bookClub: true }), P('p2', '2026-10-01'), P('p3', '2026-10-05', { bookClub: true }), P('p4', '2026-10-18', { bookClub: true }), P('trip', '2026-09-30', { endDate: '2026-10-03' })];
+    t('upcomingPlans（旅行中も含む）', () => eq(L.upcomingPlans(plans, today).map((p) => p.id), ['trip', 'p3', 'p4']));
+    t('plansToReview', () => eq(L.plansToReview(plans, today).map((p) => p.id), ['p2', 'p1']));
+    t('bookClubsInMonth', () => eq(L.bookClubsInMonth(plans, '2026-10').map((p) => p.id), ['p3', 'p4']));
+
+    // ---- 読書会の本 ----
+    const books = [
+      { id: 'b1', order: 1, pickedBy: 'A', doneAt: '2026-09-20' },
+      { id: 'b2', order: 2, pickedBy: 'B' },
+      { id: 'b3', order: 3, pickedBy: 'A' },
+    ];
+    const members = [{ id: 'A' }, { id: 'B' }];
+    t('bookQueue 次回・次々回・第◯回', () => {
+      const q = L.bookQueue(books);
+      eq([q.next.id, q.afterNext.id, q.no.get('b1'), q.no.get('b2'), q.no.get('b3')], ['b2', 'b3', 1, 2, 3]);
+    });
+    t('nextPicker 交代制', () => eq(L.nextPicker(books, members), 'B'));
+    t('nextPicker 本が無ければ未定', () => eq(L.nextPicker([], members), null));
+    t('bookForNewClub 割り当て済みは飛ばす', () => {
+      const ps = [P('c1', '2026-10-05', { bookClub: true, bookId: 'b2' })];
+      eq(L.bookForNewClub(books, ps, today).id, 'b3');
+    });
+    t('bookForNewClub 過去の日に割り当てた本は使える', () => {
+      const ps = [P('c0', '2026-09-28', { bookClub: true, bookId: 'b2' })];
+      eq(L.bookForNewClub(books, ps, today).id, 'b2');
+    });
+    t('planTitle', () => {
+      const wishById = new Map([['w1', { title: 'パンケーキ' }]]);
+      eq(L.planTitle({ bookClub: true, todos: [{ wishId: 'w1' }, { text: '買い物' }] }, { wishById }), '読書会・パンケーキ ほか1件');
+      eq(L.planTitle({ todos: [] }, {}), '会う日');
+    });
+
+    // ---- その他 ----
+    t('guessEmoji', () => eq([guessEmoji('鎌倉のカフェ', 'go'), guessEmoji('ハンバーグ', 'go'), guessEmoji('温泉旅行', 'go'), guessEmoji('何か', 'do')], ['☕', '📍', '♨️', '✨']));
+    t('normalizeIsbn', () => eq([normalizeIsbn('978-4-06-293438-1'), normalizeIsbn('4062934388')], ['9784062934381', '9784062934381']));
+
+    document.getElementById('sum').innerHTML = fail ? `<span class="ng">${fail}件 失敗</span> / ${pass}件 成功` : `<span class="ok">全${pass}件 成功</span>`;
+  </script>
+</body>
+</html>
