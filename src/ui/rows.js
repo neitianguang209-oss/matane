@@ -17,7 +17,7 @@ export const wishEmoji = (w) => w?.emoji || guessEmoji(w?.title, w?.type);
 
 // 相手が前回ひらいた後に足したもの
 export function isNewFromOther(x, snap) {
-  return !!(snap.seenBefore && x.createdBy && x.createdBy !== snap.me && String(x.createdAt) > snap.seenBefore && !x.doneAt);
+  return !!(snap.seenBefore && x.createdBy && x.createdBy !== snap.me && String(x.createdAt) > snap.seenBefore && !x.doneAt && !x.private);
 }
 
 // 「私も！」の切り替え（自分が追加したものには付けない）

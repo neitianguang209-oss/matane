@@ -24,7 +24,7 @@ create table if not exists public.matane_rooms (
 create table if not exists public.matane_items (
   room_id     text not null references public.matane_rooms(id) on delete cascade,
   id          text not null check (id ~ '^[A-Za-z0-9_-]{4,48}$'),
-  kind        text not null check (kind in ('member', 'wish', 'plan', 'book', 'note', 'like', 'memo')),
+  kind        text not null check (kind in ('member', 'wish', 'plan', 'book', 'note', 'like', 'memo', 'photo')),
   data        jsonb not null,
   deleted     boolean not null default false,
   updated_at  timestamptz not null,
@@ -115,7 +115,8 @@ begin
     k := op->>'kind';
     d := op->'data';
     if d is null or jsonb_typeof(d) <> 'object' then raise exception 'bad data'; end if;
-    if pg_column_size(d) > 100000 then raise exception 'row too large'; end if;
+    -- 写真（アイコン）だけは大きめを許す。それ以外は 100KB まで
+    if pg_column_size(d) > (case when d->>'kind' = 'photo' then 900000 else 100000 end) then raise exception 'row too large'; end if;
     ts := coalesce((d->>'updatedAt')::timestamptz, v_now);
     if ts > v_now + interval '1 day' then ts := v_now; end if;   -- 端末の時計が大きくずれていても未来の行で固定されないように
 
@@ -133,6 +134,10 @@ begin
       if ik = 'member' and not exists (select 1 from public.matane_items where room_id = p_room and id = rid)
          and (select count(*) from public.matane_items where room_id = p_room and kind = 'member') >= 8 then
         raise exception 'too many members';
+      end if;
+      if ik = 'photo' and not exists (select 1 from public.matane_items where room_id = p_room and id = rid)
+         and (select count(*) from public.matane_items where room_id = p_room and kind = 'photo' and not deleted) >= 60 then
+        raise exception 'too many photos';
       end if;
       if not exists (select 1 from public.matane_items where room_id = p_room and id = rid)
          and (select count(*) from public.matane_items where room_id = p_room) >= 20000 then

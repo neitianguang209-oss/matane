@@ -11,6 +11,15 @@
   </style>
 </head>
 <body>
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "htm": "https://esm.sh/htm@3.1.1",
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4"
+    }
+  }
+  </script>
   <div id="sum">実行中…</div>
   <ul id="out"></ul>
   <script type="module">
@@ -18,7 +27,9 @@
     import * as L from './src/lib/logic.js';
     import { guessEmoji } from './src/lib/emoji.js';
     import { normalizeIsbn, toKatakana, foldText, bookScore, splitWords } from './src/lib/books.js';
-    import { placeQueries, toPlace } from './src/lib/places.js';
+    import { placeQueries, toPlace, parseMapsUrl, isMapsLink, splitTitle } from './src/lib/places.js';
+    import { pickPhoto, hashStr } from './src/lib/photos.js';
+    import { deriveKey, encryptJSON, decryptJSON, newSalt } from './src/lib/lock.js';
 
     const out = document.getElementById('out');
     let pass = 0, fail = 0;
@@ -152,6 +163,50 @@
       eq([p.name, p.where, p.kind, p.skip], ['高尾山', '八王子市・東京都', '山', false]);
       eq(toPlace({ properties: { name: 'x', osm_value: 'bus_stop' } }).skip, true);
     });
+
+    // ---- Googleマップのリンク ----
+    t('parseMapsUrl 場所のページ（店名と正確な位置）', () => {
+      const r = parseMapsUrl('https://www.google.com/maps/place/%E6%B1%9F%E5%B3%B6%E7%A5%9E%E7%A4%BE+%E8%BE%BA%E6%B4%A5%E5%AE%AE/@35.3003664,139.4795955,17z/data=!3m1!4b1!4m6!3m5!1s0x60:0xfa!8m2!3d35.3003664!4d139.4795955!16s');
+      eq([r.name, r.lat, r.lon], ['江島神社 辺津宮', 35.30037, 139.4796]);
+    });
+    t('parseMapsUrl q=住所', () => eq(parseMapsUrl('https://maps.google.com/?q=%E9%AB%98%E5%B0%BE%E5%B1%B1').name, '高尾山'));
+    t('parseMapsUrl 地図だけ（@位置）', () => { const r = parseMapsUrl('https://www.google.com/maps/@35.62,139.24,15z'); eq([r.name, r.lat, r.lon], [null, 35.62, 139.24]); });
+    t('parseMapsUrl Googleマップ以外は読まない', () => eq(parseMapsUrl('https://example.com/'), null));
+    t('isMapsLink 短いリンク・文章の中', () => {
+      eq(isMapsLink('ここ行きたい https://maps.app.goo.gl/1DnoMPt9LnXJqD7S9'), 'https://maps.app.goo.gl/1DnoMPt9LnXJqD7S9');
+      eq(isMapsLink('https://www.instagram.com/p/xyz'), null);
+      eq(!!isMapsLink('https://www.google.co.jp/maps/place/x'), true);
+    });
+    t('splitTitle 名前 · 住所', () => eq(splitTitle('江島神社 · 〒251-0036 神奈川県藤沢市江の島２丁目'), { name: '江島神社', address: '〒251-0036 神奈川県藤沢市江の島２丁目' }));
+
+    // ---- アイコンの入れ替え ----
+    const photos = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    t('pickPhoto 固定', () => eq(pickPhoto({ id: 'm1', photoRotate: 'fixed', photoFixed: 'b' }, photos).id, 'b'));
+    t('pickPhoto 毎日は同じ日なら同じ・ふたりで同じ', () => {
+      const d = new Date(2026, 9, 2, 9), d2 = new Date(2026, 9, 2, 22);
+      eq(pickPhoto({ id: 'm1', photoRotate: 'day' }, photos, d).id, pickPhoto({ id: 'm1', photoRotate: 'day' }, photos, d2).id);
+    });
+    t('pickPhoto 1時間ごとはいろいろ出る', () => {
+      const seen = new Set();
+      for (let h = 0; h < 24; h++) seen.add(pickPhoto({ id: 'm1', photoRotate: 'hour' }, photos, new Date(2026, 9, 2, h)).id);
+      eq(seen.size, 3);
+    });
+    t('pickPhoto 写真なし', () => eq(pickPhoto({ id: 'm1' }, []), null));
+    t('hashStr は決まった値', () => eq(hashStr('abc'), hashStr('abc')));
+
+    // ---- 鍵（暗号） ----
+    try {
+      const salt = newSalt();
+      const k1 = await deriveKey('ほしとにじ', salt);
+      const box = await encryptJSON(k1, { text: 'ないしょ', page: 12 });
+      const k2 = await deriveKey('ほしとにじ', salt);
+      eq(await decryptJSON(k2, box), { text: 'ないしょ', page: 12 });
+      if (box.ct.includes('ないしょ')) throw new Error('平文が残っている');
+      let wrongOpened = true;
+      try { await decryptJSON(await deriveKey('ちがう', salt), box); } catch { wrongOpened = false; }
+      if (wrongOpened) throw new Error('ちがう合言葉で開けてしまった');
+      pass++; out.insertAdjacentHTML('beforeend', '<li class="ok">✓ 鍵：同じ合言葉なら別の端末でも開ける・ちがう合言葉では開けない</li>');
+    } catch (e) { fail++; out.insertAdjacentHTML('beforeend', `<li class="ng">✗ 鍵 — ${e.message}</li>`); }
 
     document.getElementById('sum').innerHTML = fail ? `<span class="ng">${fail}件 失敗</span> / ${pass}件 成功` : `<span class="ok">全${pass}件 成功</span>`;
   </script>

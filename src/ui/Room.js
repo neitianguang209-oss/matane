@@ -12,6 +12,7 @@ import { BookTab } from './BookTab.js';
 import { DiceSheet } from './Dice.js';
 import { BookAddSheet } from './BookAdd.js';
 import { isNewFromOther } from './rows.js';
+import { PhotoViewer } from './photo.js';
 
 const { useState, useEffect } = React;
 
@@ -29,6 +30,7 @@ export function Room({ roomId, tab, query }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [diceOpen, setDiceOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
   const base = '/r/' + roomId;
 
@@ -50,9 +52,10 @@ export function Room({ roomId, tab, query }) {
 
   const headerRight = html`
     <${SyncDot} sync=${sync} pending=${pending} online=${online} onClick=${() => go(base + '/settings')} />
-    <button class="icon-btn" aria-label="設定" onClick=${() => go(base + '/settings')} style=${{ width: 'auto', padding: '0 4px' }}>
+    <button class="icon-btn" aria-label="ふたりのアイコンを見る" onClick=${() => setViewOpen(true)} style=${{ width: 'auto', padding: '0 4px' }}>
       <${AvatarStack} members=${[me, other]} size="sm" />
-    </button>`;
+    </button>
+    <button class="icon-btn" aria-label="設定" onClick=${() => go(base + '/settings')}><${Icon} name="settings" size=${20} /></button>`;
 
   let body;
   if (tab === 'wish') body = html`<${WishTab} snap=${snap} headerRight=${headerRight} ui=${ui} />`;
@@ -83,6 +86,8 @@ export function Room({ roomId, tab, query }) {
       onBook=${() => { setAddOpen(false); setBookOpen(true); }} onDice=${() => { setAddOpen(false); setDiceOpen(true); }} />
     <${InviteSheet} open=${inviteOpen} onClose=${() => setInviteOpen(false)} snap=${snap} />
     <${DiceSheet} open=${diceOpen} onClose=${() => setDiceOpen(false)} snap=${snap} />
+    <${PhotoViewer} open=${viewOpen} onClose=${() => setViewOpen(false)} snap=${snap} initial=${other?.id ?? snap.me}
+      onEdit=${() => go(base + '/settings')} />
     <${BookAddSheet} open=${bookOpen} onClose=${() => setBookOpen(false)} snap=${snap} />
   </div>`;
 }

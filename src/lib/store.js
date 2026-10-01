@@ -9,6 +9,7 @@
 import { idb } from './idb.js';
 import { rpcPull, rpcPush, supabase } from './api.js';
 import { newRoomId, newId } from './ids.js';
+import { pickPhoto, periodKey } from './photos.js';
 
 const K_INDEX = 'index';
 const K_OUTBOX = 'outbox';
@@ -106,6 +107,9 @@ export async function init() {
     if (document.visibilityState === 'visible') { flushAll(); pullOpen(); }
   });
   setInterval(() => { if (document.visibilityState === 'visible') { pullOpen(); if (S.outbox.length) flushAll(); } }, 30000);
+  // 「1時間ごと」「毎日」のアイコンは、時間が変わったら描き直す
+  let lastHour = periodKey('hour');
+  setInterval(() => { const h = periodKey('hour'); if (h !== lastHour) { lastHour = h; emit(); } }, 60000);
   try { navigator.storage?.persist?.(); } catch { /* 無くても動く */ }
   flushAll();
   emit();
@@ -121,12 +125,18 @@ export function getRoom(id) {
   if (snapCache.has(id)) return snapCache.get(id);
   const e = S.rooms.get(id);
   if (!e) return null;
-  const live = { member: [], wish: [], plan: [], book: [], note: [], like: [], memo: [] };
+  const live = { member: [], wish: [], plan: [], book: [], note: [], like: [], memo: [], photo: [] };
   for (const x of e.items.values()) {
     if (x.deleted || !live[x.kind]) continue;
     live[x.kind].push(x);
   }
-  const members = live.member.sort(byOrder);
+  // メンバーに「今出すアイコン」を添える（_ で始まる欄は保存しない）
+  const photos = live.photo.filter((p) => p.data).sort(byOrder);
+  const members = live.member.sort(byOrder).map((m) => {
+    const mine = photos.filter((p) => p.memberId === m.id);
+    const cur = pickPhoto(m, mine);
+    return { ...m, _photos: mine, _photo: cur?.data ?? m.photo ?? null, _photoId: cur?.id ?? null };
+  });
   const snap = {
     id,
     room: e.room,
@@ -141,6 +151,7 @@ export function getRoom(id) {
     notes: live.note,
     likes: live.like,
     memos: live.memo.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),
+    photos,
     me: S.me.get(id) ?? null,
     seenBefore: S.seenBefore.get(id) ?? null,
   };
@@ -219,10 +230,12 @@ export function saveItem(roomId, x) {
   const t = nowIso();
   const prev = x.id ? e.items.get(x.id) : null;
   const me = getMe(roomId);
-  const prefix = { member: 'm', wish: 'w', plan: 'p', book: 'b', memo: 'f' }[x.kind] ?? 'x';
+  const prefix = { member: 'm', wish: 'w', plan: 'p', book: 'b', memo: 'f', photo: 'ph' }[x.kind] ?? 'x';
+  // 画面用に添えた欄（_photo など）は保存しない
+  const clean = Object.fromEntries(Object.entries(x).filter(([k]) => !k.startsWith('_')));
   const xx = {
     ...prev,
-    ...x,
+    ...clean,
     id: x.id ?? newId(prefix),
     createdAt: prev?.createdAt ?? x.createdAt ?? t,
     createdBy: prev?.createdBy ?? x.createdBy ?? me ?? null,
@@ -314,7 +327,16 @@ export async function flushAll() {
 async function flushRoom(rid, depth) {
   // 部屋 → メンバー → その他 の順で送る（部屋が無いと中身を受け付けないため）
   const rank = (o) => (o.kind === 'room' ? 0 : o.data?.kind === 'member' ? 1 : 2);
-  const ops = S.outbox.filter((o) => o.roomId === rid).sort((a, b) => rank(a) - rank(b)).slice(0, 200);
+  // 写真は大きいので、1回に送る量を 1.5MB くらいまでにする
+  const all = S.outbox.filter((o) => o.roomId === rid).sort((a, b) => rank(a) - rank(b));
+  const ops = [];
+  let size = 0;
+  for (const o of all) {
+    const n = (o.data?.data?.length ?? 0) + 2000;
+    if (ops.length && (ops.length >= 200 || size + n > 1500000)) break;
+    ops.push(o);
+    size += n;
+  }
   if (!ops.length) return;
   setSync(rid, { state: 'syncing' });
   try {

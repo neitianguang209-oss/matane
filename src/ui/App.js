@@ -19,7 +19,7 @@ function useNewsToasts() {
   React.useEffect(() => onNews((roomId, items) => {
     const snap = getRoom(roomId);
     const KINDS = ['wish', 'plan', 'book', 'memo'];
-    const list = items.filter((x) => KINDS.includes(x.kind));
+    const list = items.filter((x) => KINDS.includes(x.kind) && !x.private);   // 相手の「自分だけ」は知らせない
     const first = list[0];
     if (!first) return;
     const who = snap?.memberById.get(first.createdBy)?.name ?? '相手';
@@ -28,7 +28,7 @@ function useNewsToasts() {
       wish: () => `「${first.title}」をやりたいことリストに追加したよ`,
       plan: () => '会う日を追加したよ',
       book: () => `読書会の本『${first.title}』を追加したよ`,
-      memo: () => (first.type === 'talk' ? `響いた話をメモしたよ` : `${book ? `『${book.title}』に` : ''}付箋を貼ったよ`),
+      memo: () => (first.type === 'talk' ? `読書会で学べたことをメモしたよ` : `${book ? `『${book.title}』に` : ''}付箋を貼ったよ`),
     }[first.kind];
     const more = list.length - 1;
     const base = first.kind === 'wish' ? `/r/${roomId}/w/${first.id}` : first.kind === 'plan' ? `/r/${roomId}/p/${first.id}`

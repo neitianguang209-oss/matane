@@ -33,9 +33,10 @@ export function initial(name) {
 // 写真があれば写真、無ければ色つきの頭文字
 export function Avatar({ m, size = '', title }) {
   const c = memberColor(m);
-  if (m?.photo) {
+  const src = m?._photo ?? m?.photo;
+  if (src) {
     return html`<span class=${'avatar photo ' + size} style=${{ '--c': c }} title=${title ?? m?.name} aria-hidden="true">
-      <img src=${m.photo} alt="" />
+      <img src=${src} alt="" />
     </span>`;
   }
   return html`<span class=${'avatar ' + size} style=${{ '--c': c, '--fg': inkOn(c) }} title=${title ?? m?.name} aria-hidden="true">${initial(m?.name)}</span>`;

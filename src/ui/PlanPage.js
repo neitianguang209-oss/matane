@@ -72,8 +72,8 @@ export function PlanPage({ roomId, id }) {
         </button>
         ${p.date <= today && planEnd(p) >= today ? html`<button class="today-club" onClick=${() => go(`/r/${roomId}/b/${book.id}?talk=1`)}>
           <span class="ic">🌟</span>
-          <span class="grow"><span class="t">今日は読書会！</span><span class="s">「この話いいな」と思ったら、すぐメモ</span></span>
-          <span class="btn star small"><${Icon} name="plus" />響いた話</span>
+          <span class="grow"><span class="t">今日は読書会！</span><span class="s">学べたこと・新しい視点を、すぐメモ</span></span>
+          <span class="btn star small"><${Icon} name="plus" />学び</span>
         </button>` : null}
       </div>` : html`<button class="pick-cta" onClick=${() => go(`/r/${roomId}/p/${p.id}/edit`)}>
         <span class="ic"><${Icon} name="book" /></span>

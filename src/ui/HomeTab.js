@@ -59,7 +59,7 @@ export function HomeTab({ snap, headerRight, ui }) {
           <span class="grow">
             <span class="bold ellipsis" style=${{ display: 'block' }}>${x.kind === 'plan' ? `${fmtDate(x.date)}に会う日` : x.kind === 'memo' ? (x.type === 'talk' ? x.text : x.quote || x.insight) : x.title}</span>
             <span class="tiny muted">${x.kind === 'wish' ? `${KINDS[x.type]?.long ?? 'やりたいこと'}を追加` : x.kind === 'plan' ? '会う日を追加'
-              : x.kind === 'memo' ? `『${snap.bookById.get(x.bookId)?.title ?? '本'}』に${x.type === 'talk' ? '響いた話' : '付箋'}` : '読書会の本を追加'}</span>
+              : x.kind === 'memo' ? `『${snap.bookById.get(x.bookId)?.title ?? '本'}』に${x.type === 'talk' ? '学べたこと' : '付箋'}` : '読書会の本を追加'}</span>
           </span>
           <${Icon} name="chevronRight" size=${18} />
         </button>`)}
@@ -231,8 +231,8 @@ export function ClubCard({ snap, today, ui }) {
     </div>
     ${todayClub ? html`<button class="today-club" onClick=${() => go(todayClub.bookId ? `/r/${snap.id}/b/${todayClub.bookId}?talk=1` : `/r/${snap.id}/p/${todayClub.id}`)}>
       <span class="ic">🌟</span>
-      <span class="grow"><span class="t">今日は読書会！</span><span class="s">「この話いいな」と思ったら、すぐメモ</span></span>
-      <span class="btn star small"><${Icon} name="plus" />響いた話</span>
+      <span class="grow"><span class="t">今日は読書会！</span><span class="s">学べたこと・新しい視点を、すぐメモ</span></span>
+      <span class="btn star small"><${Icon} name="plus" />学び</span>
     </button>` : null}
     ${next
       ? html`<div style=${{ marginTop: '14px' }}><${BookLine} snap=${snap} b=${next} no=${q.no.get(next.id)} label="次回の本" today=${today} /></div>`

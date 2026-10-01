@@ -6,8 +6,11 @@ import { APP_VERSION } from '../config.js';
 import { useRoom, useOnline } from './hooks.js';
 import { Icon } from './icons.js';
 import { HOME_ICONS, homeIconId, homeIconSrc, setHomeIcon } from '../lib/homeicon.js';
-import { Avatar, Sheet, Stepper, TopBar, toast, confirmDialog, MEMBER_COLORS, squareImage } from './components.js';
+import { Avatar, Sheet, Stepper, TopBar, toast, confirmDialog, MEMBER_COLORS } from './components.js';
 import { InviteSheet } from './RoomGate.js';
+import { PhotoManager, PhotoViewer, PhotoCropper, thumbOf } from './photo.js';
+import { LockSheet, useLock } from './lockui.js';
+import { forgetKey } from '../lib/lock.js';
 
 const { useState, useEffect, useRef } = React;
 
@@ -16,6 +19,9 @@ export function Settings({ roomId }) {
   const online = useOnline();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editM, setEditM] = useState(null);
+  const [viewM, setViewM] = useState(null);
+  const [lockOpen, setLockOpen] = useState(false);
+  const lock = useLock(snap);
   const fileRef = useRef(null);
   const meM = snap.memberById.get(snap.me);
   const other = snap.members.find((m) => m.id !== snap.me);
@@ -68,12 +74,14 @@ export function Settings({ roomId }) {
 
     <h2 class="section" style=${{ marginTop: '6px' }}>ふたり</h2>
     <div class="list">
-      ${snap.members.map((m) => html`<button key=${m.id} class="list-item" onClick=${() => setEditM(m)}>
-        <${Avatar} m=${m} />
-        <div class="grow"><div class="bold">${m.name}${m.id === snap.me ? html` <span class="badge accent">あなた</span>` : null}</div>
-          <div class="tiny muted">${m.placeholder ? 'まだ部屋に入っていません' : 'アイコン・名前・色を変える'}</div></div>
-        <${Icon} name="edit" size=${18} />
-      </button>`)}
+      ${snap.members.map((m) => html`<div key=${m.id} class="list-item">
+        <button class="avatar-btn" aria-label=${`${m.name}のアイコンを大きく見る`} onClick=${() => setViewM(m.id)}><${Avatar} m=${m} size="lg" /></button>
+        <button class="grow" style=${{ background: 'none', border: 0, padding: 0, textAlign: 'left' }} onClick=${() => setEditM(m)}>
+          <div class="bold">${m.name}${m.id === snap.me ? html` <span class="badge accent">あなた</span>` : null}</div>
+          <div class="tiny muted">${m.placeholder ? 'まだ部屋に入っていません' : m.id === snap.me ? '写真（何枚でも）・名前・色を変える' : 'アイコンをタップで大きく見る'}</div>
+        </button>
+        <button class="icon-btn" aria-label="編集" onClick=${() => setEditM(m)}><${Icon} name="edit" size=${18} /></button>
+      </div>`)}
       <button class="list-item" onClick=${() => setInviteOpen(true)}>
         <${Icon} name="share" /><div class="grow"><div class="bold">${other?.placeholder ? '友だちを招待する' : `${other?.name ?? '友だち'}に部屋のリンクを送る`}</div>
           <div class="tiny muted">LINE・リンク・QRコード</div></div><${Icon} name="chevronRight" size=${18} />
@@ -102,6 +110,21 @@ export function Settings({ roomId }) {
       </button>
     </div>
 
+    <h2 class="section">自分だけのメモの鍵</h2>
+    <div class="list">
+      <button class="list-item" onClick=${() => (lock.hasLock && lock.ready ? null : setLockOpen(true))}>
+        <${Icon} name=${lock.ready ? 'lock' : 'unlock'} />
+        <div class="grow"><div class="bold">${!lock.hasLock ? '合言葉を決める' : lock.ready ? 'この端末で使えます' : 'この端末で開く（合言葉を入れる）'}</div>
+          <div class="tiny muted">${!lock.hasLock ? '読書会のメモや付箋に鍵をかけて、自分だけが読めるようにできます' : '鍵をかけたメモは暗号のまま保存され、相手には読めません'}</div></div>
+        ${lock.hasLock && lock.ready ? null : html`<${Icon} name="chevronRight" size=${18} />`}
+      </button>
+      ${lock.ready ? html`<button class="list-item" onClick=${async () => {
+        if (!(await confirmDialog({ title: 'この端末の鍵を外しますか？', body: '鍵のかかったメモは、合言葉を入れるまでこの端末では読めなくなります。メモ自体は消えません。', ok: '外す' }))) return;
+        await forgetKey(snap.id, snap.me);
+        toast('この端末の鍵を外しました');
+      }}><${Icon} name="close" /><div class="grow"><div class="bold">この端末の鍵を外す</div><div class="tiny muted">人に貸すときなど</div></div></button>` : null}
+    </div>
+
     <h2 class="section">データ</h2>
     <div class="list">
       <button class="list-item" onClick=${backup}><${Icon} name="download" /><div class="grow"><div class="bold">バックアップを保存</div><div class="tiny muted">JSONファイル。「バックアップから戻す」で復元できます</div></div></button>
@@ -118,36 +141,30 @@ export function Settings({ roomId }) {
 
     <${InviteSheet} open=${inviteOpen} onClose=${() => setInviteOpen(false)} snap=${snap} />
     <${MemberSheet} m=${editM} onClose=${() => setEditM(null)} snap=${snap} />
+    <${PhotoViewer} open=${!!viewM} onClose=${() => setViewM(null)} snap=${snap} initial=${viewM} onEdit=${(m) => setEditM(m)} />
+    <${LockSheet} open=${lockOpen} onClose=${() => setLockOpen(false)} snap=${snap} />
   </div>`;
 }
 
 function MemberSheet({ m, onClose, snap }) {
   const [v, setV] = useState(m);
-  const photoRef = useRef(null);
-  useEffect(() => { setV(m); }, [m]);
+  useEffect(() => { setV(m); }, [m?.id]);
   if (!m || !v) return null;
+  const live = snap.memberById.get(m.id) ?? m;   // 写真は保存したらすぐ反映
+  const mine = m.id === snap.me;
   const usedColor = snap.members.find((x) => x.id !== m.id)?.color;
   function save() {
-    saveItem(snap.id, { ...m, name: v.name.trim(), color: v.color, photo: v.photo ?? null, placeholder: m.placeholder && v.name.trim() === m.name ? m.placeholder : false });
+    const cur = snap.memberById.get(m.id) ?? m;
+    saveItem(snap.id, { ...cur, name: v.name.trim(), color: v.color, placeholder: m.placeholder && v.name.trim() === m.name ? m.placeholder : false });
     toast('保存したよ');
     onClose();
   }
-  async function onPhoto(e) {
-    const f = e.target.files?.[0];
-    e.target.value = '';
-    if (!f) return;
-    try { setV({ ...v, photo: await squareImage(f, 192) }); } catch { toast('その画像は使えませんでした'); }
-  }
-  return html`<${Sheet} open=${!!m} onClose=${onClose} title=${m.id === snap.me ? 'あなたのアイコン' : `${m.name}のアイコン`}>
+  return html`<${Sheet} open=${!!m} onClose=${onClose} title=${mine ? 'あなたのアイコン' : `${m.name}のアイコン`}>
     <div class="stack">
-      <div class="photo-pick">
-        <${Avatar} m=${{ ...v, name: v.name || '?' }} size="xl" />
-        <div class="stack tight grow">
-          <button class="btn small" onClick=${() => photoRef.current?.click()}><${Icon} name="camera" />${v.photo ? '写真を変える' : '好きな写真にする'}</button>
-          ${v.photo ? html`<button class="btn small ghost" onClick=${() => setV({ ...v, photo: null })}>写真をやめて頭文字にする</button>` : null}
-        </div>
-        <input type="file" accept="image/*" hidden ref=${photoRef} onChange=${onPhoto} />
-      </div>
+      ${mine ? html`<${PhotoManager} snap=${snap} m=${live} />` : html`<div class="photo-pick">
+        <${Avatar} m=${{ ...live, color: v.color }} size="xl" />
+        <div class="small muted grow">写真は${m.name}が自分の端末で選びます。${(live._photos ?? []).length ? `（${live._photos.length}枚）` : ''}</div>
+      </div>`}
       <div class="field"><label for="mname">名前</label>
         <input id="mname" class="input" placeholder="名前" value=${v.name} onInput=${(e) => setV({ ...v, name: e.target.value })} /></div>
       <div class="field"><span class="label">色 <span class="opt">写真のふち・グラフの色</span></span>
@@ -173,17 +190,21 @@ function HomeIconPicker() {
     setCur(id);
     toast('アイコンを変えました');
   }
-  async function onFile(e) {
+  const [crop, setCrop] = useState(null);
+  function onFile(e) {
     const f = e.target.files?.[0];
     e.target.value = '';
-    if (!f) return;
+    if (f) setCrop(f);
+  }
+  async function onCropped(big) {
     try {
-      const data = await squareImage(f, 180, 'image/png');
+      const data = await thumbOf(big, 180);
       await setHomeIcon({ id: 'photo', data });
       setPhoto(data);
       setCur('photo');
+      setCrop(null);
       toast('写真をアイコンにしました');
-    } catch { toast('その画像は使えませんでした'); }
+    } catch { toast('その画像は使えませんでした'); setCrop(null); }
   }
   const tiles = [...HOME_ICONS.map((x) => ({ ...x })), { id: 'photo', label: '好きな写真', src: photo }];
   return html`<h2 class="section">ホーム画面のアイコン <span class="aside">この端末だけ</span></h2>
@@ -195,6 +216,7 @@ function HomeIconPicker() {
         </button>`)}
       </div>
       <input type="file" accept="image/*" hidden ref=${ref} onChange=${onFile} />
+      ${crop ? html`<${PhotoCropper} file=${crop} onCancel=${() => setCrop(null)} onDone=${onCropped} />` : null}
       <div class="tiny muted" style=${{ marginTop: '12px', lineHeight: 1.8 }}>
         iPhone：Safariでこのページを開き、共有ボタン <${Icon} name="share" size=${13} /> →「ホーム画面に追加」で、選んだアイコンで置けます。
         もう置いてあるアイコンを変えたいときは、いちど削除してから追加しなおしてください。

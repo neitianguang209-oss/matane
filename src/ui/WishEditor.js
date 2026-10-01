@@ -3,7 +3,7 @@ import { back, go } from '../lib/router.js';
 import { saveItem, deleteItem } from '../lib/store.js';
 import { SEASONS, todayStr, addDays, seasonOfDate } from '../lib/dates.js';
 import { guessEmoji, EMOJI_CHOICES } from '../lib/emoji.js';
-import { suggestPlaces, mapUrlFor, biasFrom } from '../lib/places.js';
+import { suggestPlaces, mapUrlFor, biasFrom, isMapsLink, resolveMapsLink, mapsSearchUrl } from '../lib/places.js';
 import { useRoom } from './hooks.js';
 import { Icon } from './icons.js';
 import { Seg, Sheet, TopBar, toast, confirmDialog } from './components.js';
@@ -21,7 +21,31 @@ export function WishEditor({ roomId, id, query }) {
     area: '', place: null, url: '', memo: '', seasons: [], until: '', emoji: '',
   });
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const resolved = useRef(orig?.place?.gmaps ?? null);
   const set = (patch) => setW((cur) => ({ ...cur, ...patch }));
+
+  // Googleマップのリンクから場所を入れる（貼る・打つ・「リンクを貼る」ボタン）
+  async function fromMapsLink(text) {
+    const link = isMapsLink(text);
+    if (!link || resolved.current === link) return false;
+    resolved.current = link;
+    setLinkBusy(true);
+    try {
+      const p = await resolveMapsLink(roomId, link);
+      if (!p) { toast('リンクから場所を読み取れませんでした'); return true; }
+      setW((cur) => ({
+        ...cur,
+        place: p,
+        area: [p.name, p.where].filter(Boolean).join('（') + (p.where ? '）' : ''),
+        url: cur.url?.trim() ? cur.url : link,
+        title: cur.title?.trim() ? cur.title : p.name,
+      }));
+      toast(`📍「${p.name}」を場所に入れたよ`);
+    } catch { toast('リンクを開けませんでした。電波を確かめてください'); resolved.current = null; }
+    finally { setLinkBusy(false); }
+    return true;
+  }
   const autoEmoji = useMemo(() => guessEmoji(w.title, w.type), [w.title, w.type]);
   const emoji = w.emoji || autoEmoji;
   const ok = w.title.trim().length > 0;
@@ -46,9 +70,18 @@ export function WishEditor({ roomId, id, query }) {
     try {
       const t = (await navigator.clipboard.readText()).trim();
       const m = t.match(/https?:\/\/\S+/);
-      if (m) set({ url: m[0] });
+      if (m) { set({ url: m[0] }); fromMapsLink(m[0]); }
       else toast('リンクが見つかりませんでした');
     } catch { toast('貼り付けできませんでした。長押しで貼り付けてください'); }
+  }
+  // 場所の欄の「Googleマップのリンクを貼る」
+  async function pasteMaps() {
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (!isMapsLink(t)) { toast('コピーしたものがGoogleマップのリンクではないようです'); return; }
+      resolved.current = null;
+      await fromMapsLink(t);
+    } catch { toast('貼り付けできませんでした。下の「リンク」欄に長押しで貼ってください'); }
   }
   function save() {
     if (!ok || !urlOk) return;
@@ -101,7 +134,7 @@ export function WishEditor({ roomId, id, query }) {
         </div>` : null}
       </div>
 
-      <${PlaceField} w=${w} set=${set} bias=${biasFrom(snap.wishes)} />
+      <${PlaceField} w=${w} set=${set} bias=${biasFrom(snap.wishes)} linkBusy=${linkBusy} onPasteMaps=${pasteMaps} />
 
       <div class="field">
         <span class="label">いつやりたい？ <span class="opt">選ばなければ「いつでも」</span></span>
@@ -131,10 +164,11 @@ export function WishEditor({ roomId, id, query }) {
       <div class="field">
         <label for="url">リンク <span class="opt">お店のページ・インスタ・Googleマップなど</span></label>
         <div class="row">
-          <input id="url" class="input grow" type="url" inputmode="url" value=${w.url ?? ''} placeholder="https://…" onInput=${(e) => set({ url: e.target.value })} />
+          <input id="url" class="input grow" type="url" inputmode="url" value=${w.url ?? ''} placeholder="https://…" onInput=${(e) => { set({ url: e.target.value }); fromMapsLink(e.target.value); }} />
           <button class="btn soft small" type="button" onClick=${pasteUrl}><${Icon} name="copy" />貼る</button>
         </div>
         ${!urlOk ? html`<div class="tiny" style=${{ color: 'var(--danger)' }}>https:// から始まるリンクを入れてください</div>` : null}
+        ${linkBusy ? html`<div class="tiny muted">📍 Googleマップのリンクから場所を読み取っています…</div>` : null}
       </div>
 
       <div class="field">
@@ -162,7 +196,7 @@ export function WishEditor({ roomId, id, query }) {
 // ---------------------------------------------------------------------
 // 場所：タイトル（か、ここに打った言葉）から候補を出して、タップで決める
 // ---------------------------------------------------------------------
-function PlaceField({ w, set, bias }) {
+function PlaceField({ w, set, bias, linkBusy, onPasteMaps }) {
   const [list, setList] = useState([]);
   const [busy, setBusy] = useState(false);
   const [typing, setTyping] = useState(false);   // 場所の欄に自分で打っている
@@ -200,15 +234,24 @@ function PlaceField({ w, set, bias }) {
     </div>`;
   }
   return html`<div class="field">
-    <label for="area">場所・エリア <span class="opt">任意・候補をタップで決まります</span></label>
-    <input id="area" class="input" value=${w.area ?? ''} placeholder="例）鎌倉、下北沢のあたり"
-      onInput=${(e) => { set({ area: e.target.value }); setTyping(!!e.target.value.trim()); }} />
+    <label for="area">場所 <span class="opt">任意・候補をタップで決まります</span></label>
+    <div class="input-wrap">
+      <${Icon} name="search" />
+      <input id="area" class="input" value=${w.area ?? ''} placeholder="お店・駅・地名でさがす（例：鎌倉）"
+        onInput=${(e) => { set({ area: e.target.value }); setTyping(!!e.target.value.trim()); }} />
+    </div>
     ${busy || list.length ? html`<div class="place-sugs" aria-live="polite">
       <span class="tiny faint" style=${{ width: '100%' }}>${busy && !list.length ? '場所をさがしています…' : `「${source}」の場所の候補`}</span>
       ${list.map((p, i) => html`<button key=${i} type="button" class="place-sug" onClick=${() => set({ place: { name: p.name, where: p.where, kind: p.kind, lat: p.lat, lon: p.lon }, area: [p.name, p.where].filter(Boolean).join('（') + (p.where ? '）' : '') })}>
         <${Icon} name="mapPin" size=${14} /><span class="n">${p.name}</span>${p.where || p.kind ? html`<span class="w">${[p.kind, p.where].filter(Boolean).join('・')}</span>` : null}
       </button>`)}
     </div>` : null}
+    <div class="row" style=${{ marginTop: '6px', gap: '8px' }}>
+      <a class="btn soft small grow" href=${mapsSearchUrl([w.title, w.area].filter(Boolean).join(' ') || '')} target="_blank" rel="noopener noreferrer">
+        <${Icon} name="mapPin" />Googleマップで探す</a>
+      <button class="btn soft small grow" type="button" disabled=${linkBusy} onClick=${onPasteMaps}><${Icon} name="copy" />${linkBusy ? '読み取り中…' : 'リンクを貼る'}</button>
+    </div>
+    <div class="tiny faint" style=${{ lineHeight: 1.6 }}>候補に無いお店は、Googleマップで探して「共有 → リンクをコピー」してから「リンクを貼る」を押すと、そのまま入ります。</div>
   </div>`;
 }
 
