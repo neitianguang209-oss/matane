@@ -162,9 +162,13 @@ export function PhotoViewer({ open, onClose, snap, initial, onEdit }) {
   useEffect(() => { if (open) { setWho(initial ?? snap.me); setSel(null); } }, [open, initial]);
   if (!open) return null;
   const m = snap.memberById.get(who) ?? snap.members[0];
-  const photos = m?._photos ?? [];
-  const showing = sel ? photos.find((p) => p.id === sel)?.data : m?._photo;
+  const mine = m?.id === snap.me;
+  // 相手の写真は「いま出ている1枚」だけ。何枚あるか・入れ替え方は、本人にしか見せない
+  const photos = mine ? m?._photos ?? [] : [];
+  const showing = mine && sel ? photos.find((p) => p.id === sel)?.data : m?._photo;
   const mode = ROTATE_MODES.find((x) => x.id === (m?.photoRotate ?? 'open'));
+  const rotating = !mine && (m?._photos?.length ?? 0) > 1 && mode?.id !== 'fixed';
+  const teaser = { open: '次に開くと、ちがう写真かも…？', hour: '1時間後には、ちがう写真かも…？', day: '明日は、ちがう写真かも…？' }[mode?.id];
   return html`<${Sheet} open=${open} onClose=${onClose} title="ふたりのアイコン">
     <div class="viewer-who">
       ${snap.members.map((x) => html`<button key=${x.id} class=${'vw' + (x.id === m?.id ? ' on' : '')} onClick=${() => { setWho(x.id); setSel(null); }}>
@@ -174,7 +178,8 @@ export function PhotoViewer({ open, onClose, snap, initial, onEdit }) {
     <div class="viewer-big" style=${{ '--c': memberColor(m) }}>
       ${showing ? html`<img src=${showing} alt=${`${m?.name}のアイコン`} />` : html`<${Avatar} m=${m} size="huge" />`}
     </div>
-    ${photos.length > 1 ? html`<div class="tiny muted" style=${{ textAlign: 'center', marginTop: '8px' }}>${photos.length}枚を「${mode?.label}」で入れ替え中</div>
+    ${rotating && teaser ? html`<div class="tiny muted" style=${{ textAlign: 'center', marginTop: '10px' }}>✦ ${teaser}</div>` : null}
+    ${photos.length > 1 ? html`<div class="tiny muted" style=${{ textAlign: 'center', marginTop: '8px' }}>${photos.length}枚を「${mode?.label}」で入れ替え中（相手には、いま出ている1枚だけ見えます）</div>
       <div class="thumbs">
         ${photos.map((p) => html`<button key=${p.id} class=${'thumb' + ((sel ?? m._photoId) === p.id ? ' on' : '')} onClick=${() => setSel(p.id)} aria-label="この写真を見る">
           <img src=${p.data} alt="" />${m._photoId === p.id ? html`<span class="now">いま</span>` : null}
@@ -251,7 +256,7 @@ export function PhotoManager({ snap, m }) {
       <span class="label">入れ替え</span>
       <div style=${{ marginTop: '6px' }}><${Seg} small=${true} value=${m.photoRotate ?? 'open'} onChange=${setMode} label="入れ替え"
         options=${ROTATE_MODES.map((x) => ({ value: x.id, label: x.label }))} /></div>
-      <div class="tiny faint" style=${{ marginTop: '6px' }}>「1時間ごと」「毎日」はふたりの画面で同じ写真になります。☆で1枚に固定。</div>
+      <div class="tiny faint" style=${{ marginTop: '6px' }}>相手には、そのとき出ている1枚だけが見えます（何枚あるかは内緒）。☆で1枚に固定。</div>
     </div>` : null}
     ${crop ? html`<${PhotoCropper} file=${crop.file ?? crop.src} onCancel=${() => setCrop(null)}
       onDone=${(data) => (crop.replace ? replacePhoto(crop.replace, data) : addPhoto(data))} />` : null}

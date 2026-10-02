@@ -163,7 +163,7 @@ function MemberSheet({ m, onClose, snap }) {
     <div class="stack">
       ${mine ? html`<${PhotoManager} snap=${snap} m=${live} />` : html`<div class="photo-pick">
         <${Avatar} m=${{ ...live, color: v.color }} size="xl" />
-        <div class="small muted grow">写真は${m.name}が自分の端末で選びます。${(live._photos ?? []).length ? `（${live._photos.length}枚）` : ''}</div>
+        <div class="small muted grow">写真は${m.name}が自分の端末で選びます。</div>
       </div>`}
       <div class="field"><label for="mname">名前</label>
         <input id="mname" class="input" placeholder="名前" value=${v.name} onInput=${(e) => setV({ ...v, name: e.target.value })} /></div>
