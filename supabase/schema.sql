@@ -88,7 +88,7 @@ $$;
 -- 端末がオフラインの間にためた変更も、つながったときにこれ1回で送る。
 -- 同じ行は updatedAt が新しいほうだけ残る（古い変更が後から届いても上書きしない）。
 -- ---------------------------------------------------------------------
-create or replace function public.matane_push_batch(p_room text, p_ops jsonb)
+create or replace function public.matane_push_batch(p_room text, p_ops jsonb, p_pass text default null, p_pass_token text default null)
 returns jsonb
 language plpgsql
 security definer
@@ -121,6 +121,14 @@ begin
     if ts > v_now + interval '1 day' then ts := v_now; end if;   -- 端末の時計が大きくずれていても未来の行で固定されないように
 
     if k = 'room' then
+      -- 新しい部屋をつくれるのは、オーナーと、オーナーが認めた人だけ（前にあった部屋の復元はだれでも）
+      if not exists (select 1 from public.matane_rooms where id = p_room)
+         and not exists (select 1 from public.matane_room_log where id = p_room) then
+        if coalesce(public.matane_pass_status_of(p_pass, p_pass_token), '') not in ('owner', 'ok') then
+          raise exception 'not allowed to create';
+        end if;
+        insert into public.matane_room_log (id, pass_id) values (p_room, p_pass);
+      end if;
       insert into public.matane_rooms as x (id, data, updated_at, synced_at)
       values (p_room, d || jsonb_build_object('id', p_room), ts, v_now)
       on conflict (id) do update
@@ -187,8 +195,120 @@ end;
 $$;
 
 revoke all on function public.matane_pull(text, timestamptz)    from public;
-revoke all on function public.matane_push_batch(text, jsonb)    from public;
+revoke all on function public.matane_push_batch(text, jsonb, text, text) from public;
 revoke all on function public.matane_backup_dump(text)          from public;
 grant execute on function public.matane_pull(text, timestamptz) to anon, authenticated;
-grant execute on function public.matane_push_batch(text, jsonb) to anon, authenticated;
+grant execute on function public.matane_push_batch(text, jsonb, text, text) to anon, authenticated;
 grant execute on function public.matane_backup_dump(text)       to anon, authenticated;
+
+
+-- =====================================================================
+-- v1.3.0 部屋をつくれる人（パス）
+--
+-- ・端末ごとのパス（id ＋ token）。サーバーには token の sha256 だけ置く。
+-- ・status: none（名乗っただけ）/ wait（お願い中）/ ok（つくれる）/ no（見送り）/ owner（オーナー）
+-- ・新しい部屋は owner / ok のパスを添えたときだけつくれる（matane_push_batch で確かめる）。
+-- ・matane_room_log は「一度でもあった部屋」の記録。ここにある部屋はパス無しでも復元できる。
+-- ・オーナーになる合言葉は matane_secret の owner_code_sha256（リンクはこのPCの
+--   C:\Users\ひかる\.claude\matane-owner-link.txt にだけある）。
+-- =====================================================================
+create table if not exists public.matane_passes (
+  id            text primary key check (id ~ '^[A-Za-z0-9]{12,32}$'),
+  token_sha256  text not null,
+  name          text,
+  status        text not null default 'none' check (status in ('none', 'wait', 'ok', 'no', 'owner')),
+  via           text,
+  created_at    timestamptz not null default now(),
+  requested_at  timestamptz,
+  decided_at    timestamptz,
+  seen_at       timestamptz not null default now()
+);
+create table if not exists public.matane_room_log (
+  id          text primary key,
+  pass_id     text,
+  created_at  timestamptz not null default now()
+);
+alter table public.matane_passes   enable row level security;
+alter table public.matane_room_log enable row level security;
+revoke all on public.matane_passes, public.matane_room_log from anon, authenticated;
+
+create or replace function public.matane_pass_status_of(p_id text, p_token text)
+returns text language sql stable security definer set search_path = public, pg_catalog as $$
+  select status from public.matane_passes
+  where id = p_id and p_token is not null and token_sha256 = encode(sha256(convert_to(p_token, 'UTF8')), 'hex');
+$$;
+revoke all on function public.matane_pass_status_of(text, text) from public, anon, authenticated;
+
+-- 名乗る（無ければ登録）。今の状態とオーナーの名前を返す
+create or replace function public.matane_pass_hello(p_id text, p_token text, p_name text default null)
+returns jsonb language plpgsql security definer set search_path = public, pg_catalog as $$
+declare st text;
+begin
+  if p_id is null or p_id !~ '^[A-Za-z0-9]{12,32}$' or p_token is null or length(p_token) < 20 then raise exception 'bad pass'; end if;
+  if not exists (select 1 from public.matane_passes where id = p_id) then
+    if (select count(*) from public.matane_passes) >= 3000 then raise exception 'too many passes'; end if;
+    insert into public.matane_passes (id, token_sha256, name) values (p_id, encode(sha256(convert_to(p_token, 'UTF8')), 'hex'), left(p_name, 40));
+  end if;
+  st := public.matane_pass_status_of(p_id, p_token);
+  if st is null then raise exception 'bad pass'; end if;
+  update public.matane_passes set seen_at = now(), name = coalesce(nullif(left(trim(p_name), 40), ''), name) where id = p_id;
+  return jsonb_build_object('status', st, 'owner', (select name from public.matane_passes where status = 'owner' order by created_at limit 1));
+end; $$;
+
+-- 「部屋をつくりたい」とお願いする
+create or replace function public.matane_pass_request(p_id text, p_token text, p_name text, p_via text default null)
+returns jsonb language plpgsql security definer set search_path = public, pg_catalog as $$
+declare st text;
+begin
+  st := public.matane_pass_status_of(p_id, p_token);
+  if st is null then raise exception 'bad pass'; end if;
+  if st in ('none', 'no') then
+    if (select count(*) from public.matane_passes where status = 'wait') >= 50 then raise exception 'too many requests'; end if;
+    update public.matane_passes set status = 'wait', requested_at = now(), name = coalesce(nullif(left(trim(p_name), 40), ''), name), via = left(p_via, 120) where id = p_id;
+    st := 'wait';
+  end if;
+  return jsonb_build_object('status', st);
+end; $$;
+
+-- この端末をオーナーにする（合言葉が要る）
+create or replace function public.matane_pass_owner(p_id text, p_token text, p_code text)
+returns jsonb language plpgsql security definer set search_path = public, pg_catalog as $$
+declare want text;
+begin
+  select v into want from public.matane_secret where k = 'owner_code_sha256';
+  if want is null or p_code is null or encode(sha256(convert_to(p_code, 'UTF8')), 'hex') <> want then raise exception 'denied'; end if;
+  if public.matane_pass_status_of(p_id, p_token) is null then raise exception 'bad pass'; end if;
+  update public.matane_passes set status = 'owner', decided_at = now() where id = p_id;
+  return jsonb_build_object('status', 'owner');
+end; $$;
+
+-- オーナーだけ：一覧と、承認・見送り・取り消し
+create or replace function public.matane_pass_admin(p_id text, p_token text)
+returns jsonb language plpgsql stable security definer set search_path = public, pg_catalog as $$
+begin
+  if coalesce(public.matane_pass_status_of(p_id, p_token), '') <> 'owner' then raise exception 'denied'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', id, 'name', name, 'status', status, 'via', via,
+    'requestedAt', requested_at, 'decidedAt', decided_at, 'seenAt', seen_at) order by coalesce(requested_at, created_at) desc)
+    from public.matane_passes), '[]'::jsonb);
+end; $$;
+
+create or replace function public.matane_pass_decide(p_id text, p_token text, p_target text, p_status text)
+returns jsonb language plpgsql security definer set search_path = public, pg_catalog as $$
+begin
+  if coalesce(public.matane_pass_status_of(p_id, p_token), '') <> 'owner' then raise exception 'denied'; end if;
+  if p_status not in ('ok', 'no', 'none') then raise exception 'bad status'; end if;
+  update public.matane_passes set status = p_status, decided_at = now() where id = p_target and status <> 'owner';
+  if not found then raise exception 'no such pass'; end if;
+  return jsonb_build_object('ok', true);
+end; $$;
+
+revoke all on function public.matane_pass_hello(text, text, text) from public;
+revoke all on function public.matane_pass_request(text, text, text, text) from public;
+revoke all on function public.matane_pass_owner(text, text, text) from public;
+revoke all on function public.matane_pass_admin(text, text) from public;
+revoke all on function public.matane_pass_decide(text, text, text, text) from public;
+grant execute on function public.matane_pass_hello(text, text, text) to anon, authenticated;
+grant execute on function public.matane_pass_request(text, text, text, text) to anon, authenticated;
+grant execute on function public.matane_pass_owner(text, text, text) to anon, authenticated;
+grant execute on function public.matane_pass_admin(text, text) to anon, authenticated;
+grant execute on function public.matane_pass_decide(text, text, text, text) to anon, authenticated;

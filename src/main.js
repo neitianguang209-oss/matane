@@ -1,13 +1,17 @@
 import { createRoot } from 'react-dom/client';
 import { html } from './lib/html.js';
-import { init } from './lib/store.js';
+import { init, listRooms } from './lib/store.js';
+import { loadPass, watchPass } from './lib/pass.js';
 import { watchKeyboard } from './lib/keyboard.js';
 import { applyHomeIcon } from './lib/homeicon.js';
 import { App } from './ui/App.js';
 import { toast } from './ui/components.js';
 
 watchKeyboard();
+await loadPass();
 await init();
+// 部屋をつくれるか（オーナーなら承認待ちの数も）を確かめておく。名前は最後にひらいた部屋の自分の名前
+watchPass(() => { const s = listRooms()[0]; return s?.memberById.get(s.me)?.name ?? null; });
 await applyHomeIcon();
 createRoot(document.getElementById('root')).render(html`<${App} />`);
 

@@ -3,6 +3,8 @@ import { React } from './html.js';
 // ハッシュでの画面切り替え（GitHub Pages のサブパスでもそのまま動く）
 //   #/                       … 最後にひらいた部屋（無ければ はじめに）
 //   #/new                    … ふたりの部屋をつくる
+//   #/passes                 … 部屋をつくれる人（オーナーだけ）
+//   #/owner/<合言葉>          … この端末をオーナーにする（1回だけ開く）
 //   #/r/<room>               … ホーム        /wish /cal /book /settings はタブ
 //   #/r/<room>/w/<id|new>    … やりたいこと（/edit で編集）
 //   #/r/<room>/p/<id|new>    … 会う日（/edit で編集）
@@ -16,6 +18,8 @@ export function parse(hash) {
   const seg = path.split('/').filter(Boolean);
   if (!seg.length) return { name: 'root', query };
   if (seg[0] === 'new') return { name: 'create', query };
+  if (seg[0] === 'passes') return { name: 'passes', query };
+  if (seg[0] === 'owner' && seg[1]) return { name: 'owner', code: seg[1], query };
   if (seg[0] === 'r' && seg[1]) {
     const roomId = seg[1];
     const id = seg[3] === 'new' ? null : seg[3];

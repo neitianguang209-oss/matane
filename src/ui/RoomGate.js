@@ -1,7 +1,8 @@
 // 部屋に入るまで：読み込み中・見つからない・「あなたはどっち？」・名前の入力
 import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
-import { openRoom, closeRoom, setMe, saveItem } from '../lib/store.js';
+import { openRoom, closeRoom, setMe, saveItem, getItem } from '../lib/store.js';
+import { currentPass, usePass } from '../lib/pass.js';
 import { inviteUrl, lineShareUrl } from '../lib/share.js';
 import qrcode from 'qrcode-generator';
 import { useRoom, useOnline } from './hooks.js';
@@ -32,7 +33,20 @@ export function RoomGate({ roomId, children }) {
   if (!snap.me || !snap.memberById.get(snap.me)) return html`<${WhoAmI} snap=${snap} />`;
   const meM = snap.memberById.get(snap.me);
   if (meM.placeholder) return html`<${NameYourself} snap=${snap} m=${meM} />`;
-  return children;
+  return html`<${LinkPass} snap=${snap} m=${meM} />${children}`;
+}
+
+// この端末のパスを「自分」のメンバー情報に書いておく（オーナーが設定画面から「部屋をつくれる人」にできるように）
+function LinkPass({ snap, m }) {
+  const pass = usePass();
+  useEffect(() => {
+    const pid = currentPass()?.id;
+    if (!pid || !pass.checked || pass.error) return;   // サーバーに名乗れてから（承認のときに見つかるように）
+    const ids = m.passIds ?? [];
+    if (ids.includes(pid)) return;
+    saveItem(snap.id, { ...getItem(snap.id, m.id), passIds: [...ids, pid].slice(-5) });
+  }, [snap.id, m.id, pass.checked, pass.error]);
+  return null;
 }
 
 function WhoAmI({ snap }) {

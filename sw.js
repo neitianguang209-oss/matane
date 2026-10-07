@@ -1,6 +1,6 @@
 // またね Service Worker（オフラインでもアプリを開けるように）
 // アプリを更新して公開するたびに CACHE_NAME の番号を上げること（上げないと古い画面が出続ける）
-const CACHE_NAME = 'matane-v4';
+const CACHE_NAME = 'matane-v5';
 const APP_SHELL = [
   './',
   './index.html',
@@ -26,6 +26,7 @@ const APP_SHELL = [
   './src/lib/lock.js',
   './src/lib/logic.js',
   './src/lib/photos.js',
+  './src/lib/pass.js',
   './src/lib/places.js',
   './src/lib/router.js',
   './src/lib/share.js',
@@ -43,6 +44,7 @@ const APP_SHELL = [
   './src/ui/Room.js',
   './src/ui/RoomGate.js',
   './src/ui/Settings.js',
+  './src/ui/Rooms.js',
   './src/ui/Welcome.js',
   './src/ui/WishEditor.js',
   './src/ui/WishPage.js',

@@ -9,7 +9,8 @@
 import { idb } from './idb.js';
 import { rpcPull, rpcPush, supabase } from './api.js';
 import { newRoomId, newId } from './ids.js';
-import { pickPhoto, periodKey } from './photos.js';
+import { pickPhoto, periodKey, tapRotates } from './photos.js';
+import { currentPass } from './pass.js';
 
 const K_INDEX = 'index';
 const K_OUTBOX = 'outbox';
@@ -27,6 +28,7 @@ const S = {
   me: new Map(),        // roomId -> memberId（この端末では誰か）
   seenBefore: new Map(),// roomId -> 前回ひらいた時刻（相手の新着に印をつける）
   storageOk: true,
+  taps: {},             // memberId -> この端末でアイコンをタップした回数（「タップするたび」の写真用）
 };
 
 // ---------------------------------------------------------------------
@@ -94,6 +96,7 @@ export async function init() {
   try {
     S.index = (await idb.get(K_INDEX)) ?? [];
     S.outbox = (await idb.get(K_OUTBOX)) ?? [];
+    S.taps = (await idb.get('taps')) ?? {};
     for (const it of S.index) {
       S.rooms.set(it.id, hydrate(await idb.get(kRoom(it.id))));
       const me = await idb.get(kMe(it.id));
@@ -134,7 +137,7 @@ export function getRoom(id) {
   const photos = live.photo.filter((p) => p.data).sort(byOrder);
   const members = live.member.sort(byOrder).map((m) => {
     const mine = photos.filter((p) => p.memberId === m.id);
-    const cur = pickPhoto(m, mine);
+    const cur = pickPhoto(m, mine, new Date(), S.taps[m.id] ?? 0);
     return { ...m, _photos: mine, _photo: cur?.data ?? m.photo ?? null, _photoId: cur?.id ?? null };
   });
   const snap = {
@@ -175,6 +178,21 @@ function setSync(id, patch) {
   emit();
 }
 
+// アイコンをタップしたら次の写真へ（「タップするたび」の人だけ。この端末だけの記憶）
+// 入れ替わった人がいれば true
+export function nextPhoto(roomId, memberIds) {
+  const snap = getRoom(roomId);
+  let moved = false;
+  for (const id of memberIds) {
+    const m = snap?.memberById.get(id);
+    if (!m || !tapRotates(m, m._photos)) continue;
+    S.taps = { ...S.taps, [id]: (S.taps[id] ?? 0) + 1 };
+    moved = true;
+  }
+  if (moved) { idb.set('taps', S.taps).catch(() => {}); emit(); }
+  return moved;
+}
+
 // この端末で「自分」はどちらか（端末ごと・部屋ごと）
 export const getMe = (roomId) => S.me.get(roomId) ?? null;
 export function setMe(roomId, memberId) {
@@ -203,7 +221,8 @@ export function createRoom({ myName, friendName }) {
   e.room = { id, bookClub: { perMonth: 2 }, createdAt: t, updatedAt: t };
   e.cursor = null;
   enqueue(id, 'room', e.room);
-  const me = { kind: 'member', id: newId('m'), name: myName.trim(), color: 0, order: 0, createdAt: t, updatedAt: t };
+  const pid = currentPass()?.id;
+  const me = { kind: 'member', id: newId('m'), name: myName.trim(), color: 0, order: 0, passIds: pid ? [pid] : [], createdAt: t, updatedAt: t };
   const friend = {
     kind: 'member', id: newId('m'), name: friendName.trim() || 'ともだち', placeholder: !friendName.trim(),
     color: 1, order: 1, createdAt: t, updatedAt: t,
@@ -340,7 +359,9 @@ async function flushRoom(rid, depth) {
   if (!ops.length) return;
   setSync(rid, { state: 'syncing' });
   try {
-    await rpcPush(rid, ops.map((o) => ({ kind: o.kind, data: o.data })));
+    // 部屋そのものを送るときは「部屋をつくれる人」の印も添える（新しい部屋はこれが無いと受け付けない）
+    const pass = ops.some((o) => o.kind === 'room') ? currentPass() : null;
+    await rpcPush(rid, ops.map((o) => ({ kind: o.kind, data: o.data })), pass);
     S.outbox = S.outbox.filter((o) => !ops.includes(o));
     persistOutbox();
     setSync(rid, { state: 'idle', lastSync: Date.now(), error: null });

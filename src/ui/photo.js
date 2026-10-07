@@ -1,7 +1,7 @@
 // アイコンの写真：切り抜き（丸に入る所を合わせる）・大きく見る・何枚も登録して入れ替える
 import { html, React } from '../lib/html.js';
-import { saveItem, getItem } from '../lib/store.js';
-import { ROTATE_MODES } from '../lib/photos.js';
+import { saveItem, getItem, nextPhoto } from '../lib/store.js';
+import { ROTATE_MODES, tapRotates } from '../lib/photos.js';
 import { Icon } from './icons.js';
 import { Avatar, Sheet, Seg, toast, confirmDialog, memberColor } from './components.js';
 
@@ -159,6 +159,7 @@ export function PhotoCropper({ file, onDone, onCancel }) {
 export function PhotoViewer({ open, onClose, snap, initial, onEdit }) {
   const [who, setWho] = useState(initial ?? snap.me);
   const [sel, setSel] = useState(null);
+  const [flip, setFlip] = useState(0);
   useEffect(() => { if (open) { setWho(initial ?? snap.me); setSel(null); } }, [open, initial]);
   if (!open) return null;
   const m = snap.memberById.get(who) ?? snap.members[0];
@@ -168,14 +169,16 @@ export function PhotoViewer({ open, onClose, snap, initial, onEdit }) {
   const showing = mine && sel ? photos.find((p) => p.id === sel)?.data : m?._photo;
   const mode = ROTATE_MODES.find((x) => x.id === (m?.photoRotate ?? 'open'));
   const rotating = !mine && (m?._photos?.length ?? 0) > 1 && mode?.id !== 'fixed';
-  const teaser = { open: '次に開くと、ちがう写真かも…？', hour: '1時間後には、ちがう写真かも…？', day: '明日は、ちがう写真かも…？' }[mode?.id];
+  const tappable = tapRotates(m, m?._photos) && !(mine && sel);
+  const teaser = { open: '写真をタップすると、ちがう写真になるかも…？', hour: '1時間後には、ちがう写真かも…？', day: '明日は、ちがう写真かも…？' }[mode?.id];
   return html`<${Sheet} open=${open} onClose=${onClose} title="ふたりのアイコン">
     <div class="viewer-who">
       ${snap.members.map((x) => html`<button key=${x.id} class=${'vw' + (x.id === m?.id ? ' on' : '')} onClick=${() => { setWho(x.id); setSel(null); }}>
         <${Avatar} m=${x} size="lg" /><span>${x.name}${x.id === snap.me ? '（あなた）' : ''}</span>
       </button>`)}
     </div>
-    <div class="viewer-big" style=${{ '--c': memberColor(m) }}>
+    <div key=${flip} class=${'viewer-big' + (tappable ? ' tappable' : '') + (flip ? ' flip' : '')} style=${{ '--c': memberColor(m) }}
+      onClick=${tappable ? () => { if (nextPhoto(snap.id, [m.id])) setFlip((n) => n + 1); } : undefined}>
       ${showing ? html`<img src=${showing} alt=${`${m?.name}のアイコン`} />` : html`<${Avatar} m=${m} size="huge" />`}
     </div>
     ${rotating && teaser ? html`<div class="tiny muted" style=${{ textAlign: 'center', marginTop: '10px' }}>✦ ${teaser}</div>` : null}

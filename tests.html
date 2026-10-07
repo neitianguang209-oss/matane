@@ -28,7 +28,7 @@
     import { guessEmoji } from './src/lib/emoji.js';
     import { normalizeIsbn, toKatakana, foldText, bookScore, splitWords } from './src/lib/books.js';
     import { placeQueries, toPlace, parseMapsUrl, isMapsLink, splitTitle } from './src/lib/places.js';
-    import { pickPhoto, hashStr } from './src/lib/photos.js';
+    import { pickPhoto, hashStr, tapRotates } from './src/lib/photos.js';
     import { deriveKey, encryptJSON, decryptJSON, newSalt } from './src/lib/lock.js';
 
     const out = document.getElementById('out');
@@ -190,6 +190,20 @@
       const seen = new Set();
       for (let h = 0; h < 24; h++) seen.add(pickPhoto({ id: 'm1', photoRotate: 'hour' }, photos, new Date(2026, 9, 2, h)).id);
       eq(seen.size, 3);
+    });
+    t('pickPhoto タップするたび：開き直しても同じ・タップで必ず変わる・3回で一巡', () => {
+      const m = { id: 'm1', photoRotate: 'open' };
+      eq(pickPhoto(m, photos, new Date(), 0).id, pickPhoto(m, photos, new Date(2027, 0, 1), 0).id);
+      const seq = [0, 1, 2, 3].map((n) => pickPhoto(m, photos, new Date(), n).id);
+      eq(seq[0] !== seq[1] && seq[1] !== seq[2], true);
+      eq(new Set(seq.slice(0, 3)).size, 3);
+      eq(seq[3], seq[0]);
+      eq(pickPhoto({ id: 'm1' }, photos, new Date(), 1).id, seq[1]);   // 設定なしは「タップするたび」
+    });
+    t('tapRotates', () => {
+      eq(tapRotates({ id: 'm1' }, photos), true);
+      eq(tapRotates({ id: 'm1', photoRotate: 'day' }, photos), false);
+      eq(tapRotates({ id: 'm1' }, [{ id: 'a' }]), false);
     });
     t('pickPhoto 写真なし', () => eq(pickPhoto({ id: 'm1' }, []), null));
     t('hashStr は決まった値', () => eq(hashStr('abc'), hashStr('abc')));

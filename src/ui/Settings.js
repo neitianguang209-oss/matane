@@ -11,6 +11,8 @@ import { InviteSheet } from './RoomGate.js';
 import { PhotoManager, PhotoViewer, PhotoCropper, thumbOf } from './photo.js';
 import { LockSheet, useLock } from './lockui.js';
 import { forgetKey } from '../lib/lock.js';
+import { usePass, canCreate, listPasses, decidePass } from '../lib/pass.js';
+import { RoomsSheet } from './Rooms.js';
 
 const { useState, useEffect, useRef } = React;
 
@@ -21,6 +23,8 @@ export function Settings({ roomId }) {
   const [editM, setEditM] = useState(null);
   const [viewM, setViewM] = useState(null);
   const [lockOpen, setLockOpen] = useState(false);
+  const [roomsOpen, setRoomsOpen] = useState(false);
+  const pass = usePass();
   const lock = useLock(snap);
   const fileRef = useRef(null);
   const meM = snap.memberById.get(snap.me);
@@ -86,6 +90,21 @@ export function Settings({ roomId }) {
         <${Icon} name="share" /><div class="grow"><div class="bold">${other?.placeholder ? '友だちを招待する' : `${other?.name ?? '友だち'}に部屋のリンクを送る`}</div>
           <div class="tiny muted">LINE・リンク・QRコード</div></div><${Icon} name="chevronRight" size=${18} />
       </button>
+      ${pass.status === 'owner' && other && !other.placeholder ? html`<${GrantRow} m=${other} />` : null}
+    </div>
+
+    <h2 class="section">部屋</h2>
+    <div class="list">
+      <button class="list-item" onClick=${() => setRoomsOpen(true)}>
+        <${Icon} name="users" /><div class="grow"><div class="bold">ほかの部屋・新しい部屋をつくる</div>
+          <div class="tiny muted">${canCreate(pass) ? 'ほかの友だちとの部屋もつくれます' : pass.status === 'wait' ? `${pass.owner ?? 'オーナー'}の承認待ち` : `新しい部屋は${pass.owner ?? 'オーナー'}の承認があるとつくれます`}</div></div>
+        <${Icon} name="chevronRight" size=${18} />
+      </button>
+      ${pass.status === 'owner' ? html`<button class="list-item" onClick=${() => go('/passes')}>
+        <span style=${{ fontSize: '22px' }}>🔑</span><div class="grow"><div class="bold">部屋をつくれる人 ${pass.waiting ? html`<span class="badge new">承認待ち ${pass.waiting}</span>` : null}</div>
+          <div class="tiny muted">オーナーだけの画面。お願いの承認・取り消し</div></div>
+        <${Icon} name="chevronRight" size=${18} />
+      </button>` : null}
     </div>
 
     <h2 class="section">読書会</h2>
@@ -143,7 +162,36 @@ export function Settings({ roomId }) {
     <${MemberSheet} m=${editM} onClose=${() => setEditM(null)} snap=${snap} />
     <${PhotoViewer} open=${!!viewM} onClose=${() => setViewM(null)} snap=${snap} initial=${viewM} onEdit=${(m) => setEditM(m)} />
     <${LockSheet} open=${lockOpen} onClose=${() => setLockOpen(false)} snap=${snap} />
+    <${RoomsSheet} open=${roomsOpen} onClose=${() => setRoomsOpen(false)} current=${roomId} />
   </div>`;
+}
+
+// オーナーだけ：同じ部屋の相手を「部屋をつくれる人」にする
+function GrantRow({ m }) {
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => listPasses().then(setList).catch(() => setList([]));
+  useEffect(() => { load(); }, [m.id, (m.passIds ?? []).join()]);
+  const ids = m.passIds ?? [];
+  const rows = (list ?? []).filter((p) => ids.includes(p.id));
+  const on = rows.some((p) => p.status === 'ok' || p.status === 'owner');
+  async function toggle() {
+    if (!rows.length) return;
+    if (on && !(await confirmDialog({ title: `${m.name}の権利を取り消しますか？`, body: '今ある部屋はそのまま使えます。', ok: '取り消す', danger: true }))) return;
+    setBusy(true);
+    try {
+      for (const p of rows) if (p.status !== 'owner') await decidePass(p.id, on ? 'none' : 'ok');
+      toast(on ? '取り消しました' : `${m.name}もほかの友だちと部屋をつくれるようになりました`);
+      await load();
+    } catch { toast('うまくいきませんでした'); } finally { setBusy(false); }
+  }
+  return html`<button class="list-item" disabled=${!rows.length || busy} onClick=${toggle}>
+    <span style=${{ fontSize: '22px' }}>🔑</span>
+    <div class="grow"><div class="bold">${m.name}も部屋をつくれるようにする</div>
+      <div class="tiny muted">${list === null ? '確かめています…' : !rows.length ? `${m.name}が新しい版で部屋を開くと選べます`
+        : on ? 'ほかの友だちとの部屋をつくれます（その友だちが新しくつくるときは、あなたの承認がいります）' : 'オンにすると、ほかの友だちとの部屋を自分でつくれます'}</div></div>
+    <span class=${"switch" + (on ? " on" : "")} style=${{ width: "auto", padding: 0 }} aria-hidden="true"><span class="track"></span></span>
+  </button>`;
 }
 
 function MemberSheet({ m, onClose, snap }) {

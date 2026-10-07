@@ -11,6 +11,8 @@ import { PlanPage } from './PlanPage.js';
 import { PlanEditor } from './PlanEditor.js';
 import { BookPage } from './BookPage.js';
 import { Settings } from './Settings.js';
+import { CreateGate, OwnerClaim, PassesPage } from './Rooms.js';
+import { usePass } from '../lib/pass.js';
 
 const scrollMemory = new Map();
 
@@ -37,10 +39,21 @@ function useNewsToasts() {
   }), []);
 }
 
+// オーナーの端末：部屋をつくりたいお願いが届いたら知らせる
+function useWaitingToast() {
+  const { waiting } = usePass();
+  const prev = React.useRef(0);
+  React.useEffect(() => {
+    if (waiting > prev.current) toast(`部屋をつくりたいお願いが${waiting}件届いています`, { action: '見る', onAction: () => go('/passes'), duration: 8000 });
+    prev.current = waiting;
+  }, [waiting]);
+}
+
 export function App() {
   const route = useRoute();
   const key = location.hash;
   useNewsToasts();
+  useWaitingToast();
 
   // 一覧 → 詳細 → 一覧 と戻ったとき、元のスクロール位置に戻す
   const prevKey = React.useRef(key);
@@ -61,7 +74,9 @@ export function App() {
   let page;
   const r = route;
   switch (r.name) {
-    case 'create': page = html`<${CreateRoom} />`; break;
+    case 'create': page = html`<${CreateGate}><${CreateRoom} /><//>`; break;
+    case 'passes': page = html`<${PassesPage} />`; break;
+    case 'owner': page = html`<${OwnerClaim} code=${r.code} />`; break;
     case 'room': page = html`<${Room} roomId=${r.roomId} tab=${r.tab} query=${r.query} />`; break;
     case 'wish': page = html`<${WishPage} roomId=${r.roomId} id=${r.id} />`; break;
     case 'wishEdit': page = html`<${WishEditor} key=${r.id ?? 'new'} roomId=${r.roomId} id=${r.id} query=${r.query} />`; break;

@@ -1,6 +1,6 @@
 import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
-import { saveItem, getItem } from '../lib/store.js';
+import { saveItem, getItem, listRooms } from '../lib/store.js';
 import { fmtLong, fmtDate, countdown, seasonOfDate, seasonById, monthKey, monthOf, parseDate, WD } from '../lib/dates.js';
 import { groupWishes, upcomingPlans, plansToReview, bookQueue, nextPicker, bookClubsInMonth, planForBook, planEnd } from '../lib/logic.js';
 import { homeIconSrc } from '../lib/homeicon.js';
@@ -31,7 +31,7 @@ export function HomeTab({ snap, headerRight, ui }) {
   return html`<div>
     <header class="home-head">
       <img class="logo" src=${homeIconSrc()} alt="" />
-      <div class="name grow"><span>またね</span></div>
+      <button class="name grow tap" onClick=${ui.openRooms} aria-label="部屋を切りかえる"><span>またね</span>${listRooms().length > 1 ? html`<${Icon} name="chevronDown" size=${18} />` : null}</button>
       ${headerRight}
     </header>
 
