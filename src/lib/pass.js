@@ -71,6 +71,14 @@ export async function claimOwner(code) {
   await checkPass();
 }
 
+// 前からある部屋をつくった人（1人目のメンバー）は、オーナーがまだいなければ自動でオーナーになる
+// （サーバー側で「その部屋の1人目のメンバーにこの端末のパスが書いてあるか」を確かめる）
+export async function claimCreator(roomId) {
+  await loadPass();
+  await rpc('matane_pass_claim_creator', { p_id: pass.id, p_token: pass.token, p_room: roomId });
+  await checkPass();
+}
+
 // ---- オーナーだけ ----
 export async function listPasses() {
   await loadPass();

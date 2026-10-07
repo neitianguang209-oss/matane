@@ -312,3 +312,23 @@ grant execute on function public.matane_pass_request(text, text, text, text) to 
 grant execute on function public.matane_pass_owner(text, text, text) to anon, authenticated;
 grant execute on function public.matane_pass_admin(text, text) to anon, authenticated;
 grant execute on function public.matane_pass_decide(text, text, text, text) to anon, authenticated;
+
+-- v1.3.1 前からある部屋をつくった人（その部屋の1人目のメンバー）は、オーナーがまだいなければ自動でオーナーになる
+create or replace function public.matane_pass_claim_creator(p_id text, p_token text, p_room text)
+returns jsonb language plpgsql security definer set search_path = public, pg_catalog as $$
+begin
+  if public.matane_pass_status_of(p_id, p_token) is null then raise exception 'bad pass'; end if;
+  if exists (select 1 from public.matane_passes where status = 'owner') then raise exception 'owner exists'; end if;
+  if not exists (select 1 from public.matane_room_log where id = p_room and pass_id is null) then raise exception 'denied'; end if;
+  if not exists (
+    select 1 from public.matane_items
+    where room_id = p_room and kind = 'member' and not deleted
+      and coalesce((data->>'order')::int, -1) = 0
+      and coalesce(data->>'placeholder', 'false') <> 'true'
+      and coalesce(data->'passIds', '[]'::jsonb) ? p_id
+  ) then raise exception 'denied'; end if;
+  update public.matane_passes set status = 'owner', decided_at = now() where id = p_id;
+  return jsonb_build_object('status', 'owner');
+end; $$;
+revoke all on function public.matane_pass_claim_creator(text, text, text) from public;
+grant execute on function public.matane_pass_claim_creator(text, text, text) to anon, authenticated;

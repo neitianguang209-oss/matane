@@ -1,8 +1,8 @@
 // 部屋に入るまで：読み込み中・見つからない・「あなたはどっち？」・名前の入力
 import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
-import { openRoom, closeRoom, setMe, saveItem, getItem } from '../lib/store.js';
-import { currentPass, usePass } from '../lib/pass.js';
+import { openRoom, closeRoom, setMe, saveItem, getItem, flushAll } from '../lib/store.js';
+import { currentPass, usePass, claimCreator } from '../lib/pass.js';
 import { inviteUrl, lineShareUrl } from '../lib/share.js';
 import qrcode from 'qrcode-generator';
 import { useRoom, useOnline } from './hooks.js';
@@ -43,9 +43,17 @@ function LinkPass({ snap, m }) {
     const pid = currentPass()?.id;
     if (!pid || !pass.checked || pass.error) return;   // サーバーに名乗れてから（承認のときに見つかるように）
     const ids = m.passIds ?? [];
-    if (ids.includes(pid)) return;
-    saveItem(snap.id, { ...getItem(snap.id, m.id), passIds: [...ids, pid].slice(-5) });
-  }, [snap.id, m.id, pass.checked, pass.error]);
+    if (!ids.includes(pid)) saveItem(snap.id, { ...getItem(snap.id, m.id), passIds: [...ids, pid].slice(-5) });
+    // 部屋をつくった人（1人目）で、まだオーナーがいなければ、この端末がオーナーになる
+    if (m.order === 0 && !pass.owner && pass.status !== 'owner') {
+      // パスを書いたメンバー情報がサーバーに届いてから頼む（届くのが遅れたら数回やり直す）
+      let alive = true;
+      const tryClaim = (n) => flushAll().then(() => claimCreator(snap.id))
+        .catch(() => { if (alive && n < 4) setTimeout(() => tryClaim(n + 1), 4000); });   // 前からある部屋でなければ何もしない
+      tryClaim(0);
+      return () => { alive = false; };
+    }
+  }, [snap.id, m.id, pass.checked, pass.error, pass.owner]);
   return null;
 }
 
