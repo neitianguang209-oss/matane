@@ -28,7 +28,8 @@ const S = {
   me: new Map(),        // roomId -> memberId（この端末では誰か）
   seenBefore: new Map(),// roomId -> 前回ひらいた時刻（相手の新着に印をつける）
   storageOk: true,
-  taps: {},             // memberId -> この端末でアイコンをタップした回数（「タップするたび」の写真用）
+  rejected: [],         // サーバーに受け付けられなかった行 [{ roomId, id, reason, at }]
+  taps: {},           // memberId -> この端末でアイコンをタップした回数（「タップするたび」の写真用）
 };
 
 // ---------------------------------------------------------------------
@@ -97,6 +98,7 @@ export async function init() {
     S.index = (await idb.get(K_INDEX)) ?? [];
     S.outbox = (await idb.get(K_OUTBOX)) ?? [];
     S.taps = (await idb.get('taps')) ?? {};
+    S.rejected = (await idb.get('rejected')) ?? [];
     for (const it of S.index) {
       S.rooms.set(it.id, hydrate(await idb.get(kRoom(it.id))));
       const me = await idb.get(kMe(it.id));
@@ -356,14 +358,19 @@ async function flushRoom(rid, depth) {
     ops.push(o);
     size += n;
   }
-  if (!ops.length) return;
+  if (!ops.length) {
+    if (getSync(rid).state === 'syncing') setSync(rid, { state: 'idle', lastSync: Date.now(), error: null });
+    return;
+  }
   setSync(rid, { state: 'syncing' });
   try {
     // 部屋そのものを送るときは「部屋をつくれる人」の印も添える（新しい部屋はこれが無いと受け付けない）
     const pass = ops.some((o) => o.kind === 'room') ? currentPass() : null;
-    await rpcPush(rid, ops.map((o) => ({ kind: o.kind, data: o.data })), pass);
+    const res = await rpcPush(rid, ops.map((o) => ({ kind: o.kind, data: o.data })), pass);
     S.outbox = S.outbox.filter((o) => !ops.includes(o));
     persistOutbox();
+    // 上限（写真の枚数など）で受け付けられなかった行は、端末には残したまま「送れなかったもの」に記録する
+    for (const r of res?.rejected ?? []) park(rid, r.id, r.reason);
     setSync(rid, { state: 'idle', lastSync: Date.now(), error: null });
     broadcast(rid);
     if (S.outbox.some((o) => o.roomId === rid) && depth < 20) await flushRoom(rid, depth + 1);
@@ -378,11 +385,43 @@ async function flushRoom(rid, depth) {
         return flushRoom(rid, depth + 1);
       }
     }
+    // サーバーに断られた：まとめて送ると1行のせいで全部が止まるので、1行ずつ送って原因の行だけを外す
+    if (err.kind === 'server' && ops.length > 1 && depth < 20) {
+      const stuck = await isolate(rid, ops);
+      if (!stuck) return flushRoom(rid, depth + 1);
+    }
     setSync(rid, { state: err.kind === 'network' ? 'offline' : 'error', error: String(err.message ?? err) });
     clearTimeout(retryTimer);
     retryTimer = setTimeout(flushAll, err.kind === 'network' ? 20000 : 60000);
   }
 }
+
+// 1行ずつ送る。サーバーに断られた行は送信待ちから外して記録する（端末のデータは消さない）。
+// 電波などで送れなかったら true（あとでやり直す）
+async function isolate(rid, ops) {
+  for (const o of ops) {
+    try {
+      const pass = o.kind === 'room' ? currentPass() : null;
+      const res = await rpcPush(rid, [{ kind: o.kind, data: o.data }], pass);
+      for (const r of res?.rejected ?? []) park(rid, r.id, r.reason);
+    } catch (err) {
+      if (err.kind !== 'server') return true;
+      park(rid, o.id, String(err.message ?? err));
+    }
+    S.outbox = S.outbox.filter((x) => x !== o);
+    persistOutbox();
+  }
+  return false;
+}
+
+// 送れなかった行の記録（設定画面に件数を出す。データ自体は端末に残っている）
+function park(rid, id, reason) {
+  console.warn('matane: サーバーに受け付けられなかった行', rid, id, reason);
+  S.rejected = [...S.rejected.filter((x) => !(x.roomId === rid && x.id === id)), { roomId: rid, id, reason, at: nowIso() }].slice(-200);
+  idb.set('rejected', S.rejected).catch(() => {});
+  emit();
+}
+export const rejectedList = (rid) => S.rejected.filter((x) => x.roomId === rid);
 
 // ---------------------------------------------------------------------
 // 同期：受け取る

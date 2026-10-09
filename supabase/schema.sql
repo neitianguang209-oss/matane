@@ -332,3 +332,8 @@ begin
 end; $$;
 revoke all on function public.matane_pass_claim_creator(text, text, text) from public;
 grant execute on function public.matane_pass_claim_creator(text, text, text) to anon, authenticated;
+
+-- v1.3.2 上限に引っかかった行は「その行だけ」受け付けずに rejected で返す（上の matane_push_batch を置き換え）。
+-- 前は全体を失敗にしていたので、写真1枚が上限（部屋で60枚）を超えただけで、その端末の送信待ちがまるごと止まっていた。
+-- 写真の上限は1人60枚に。端末側も、断られたら1行ずつ送って原因の行だけ外す（store.js の isolate）。
+-- （本文は Supabase の migration matane_push_batch_skip_limits と同じ）

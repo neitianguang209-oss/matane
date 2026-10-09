@@ -3,6 +3,7 @@ import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
 import { openRoom, closeRoom, setMe, saveItem, getItem, flushAll } from '../lib/store.js';
 import { currentPass, usePass, claimCreator } from '../lib/pass.js';
+import { APP_VERSION } from '../config.js';
 import { inviteUrl, lineShareUrl } from '../lib/share.js';
 import qrcode from 'qrcode-generator';
 import { useRoom, useOnline } from './hooks.js';
@@ -43,7 +44,10 @@ function LinkPass({ snap, m }) {
     const pid = currentPass()?.id;
     if (!pid || !pass.checked || pass.error) return;   // サーバーに名乗れてから（承認のときに見つかるように）
     const ids = m.passIds ?? [];
-    if (!ids.includes(pid)) saveItem(snap.id, { ...getItem(snap.id, m.id), passIds: [...ids, pid].slice(-5) });
+    // どの版で使っているかも書いておく（設定画面で相手が新しい版か確かめられるように）
+    if (!ids.includes(pid) || m.appVersion !== APP_VERSION) {
+      saveItem(snap.id, { ...getItem(snap.id, m.id), passIds: ids.includes(pid) ? ids : [...ids, pid].slice(-5), appVersion: APP_VERSION });
+    }
     // 部屋をつくった人（1人目）で、まだオーナーがいなければ、この端末がオーナーになる
     if (m.order === 0 && !pass.owner && pass.status !== 'owner') {
       // パスを書いたメンバー情報がサーバーに届いてから頼む（届くのが遅れたら数回やり直す）
@@ -53,7 +57,7 @@ function LinkPass({ snap, m }) {
       tryClaim(0);
       return () => { alive = false; };
     }
-  }, [snap.id, m.id, pass.checked, pass.error, pass.owner]);
+  }, [snap.id, m.id, m.appVersion, pass.checked, pass.error, pass.owner]);
   return null;
 }
 

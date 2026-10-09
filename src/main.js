@@ -4,6 +4,7 @@ import { init, listRooms } from './lib/store.js';
 import { loadPass, watchPass } from './lib/pass.js';
 import { watchKeyboard } from './lib/keyboard.js';
 import { applyHomeIcon } from './lib/homeicon.js';
+import { watchUpdates } from './lib/update.js';
 import { App } from './ui/App.js';
 import { toast } from './ui/components.js';
 
@@ -15,10 +16,13 @@ watchPass(() => { const s = listRooms()[0]; return s?.memberById.get(s.me)?.name
 await applyHomeIcon();
 createRoot(document.getElementById('root')).render(html`<${App} />`);
 
-// 新しい版を公開したとき：裏で入れ替わったら「更新」で読み込み直せるように知らせる
-// （はじめて開いたときは古い版が無いので知らせない）
+// 新しい版が出ていたら、開いたとき・戻ってきたときに自動で入れ替える（データは端末とクラウドに保存済みなので消えない）
+watchUpdates({ onUpdating: () => toast('新しい版に更新しています…', { duration: 4000 }) });
+
+// Service Worker が裏で入れ替わったとき：見ていなければそのまま読み込み直す。見ているときは「更新」で
 if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (document.visibilityState === 'hidden') { location.reload(); return; }
     toast('新しい版になりました ✦', { action: '更新', onAction: () => location.reload(), duration: 12000 });
   });
 }

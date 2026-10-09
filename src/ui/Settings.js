@@ -1,6 +1,6 @@
 import { html, React } from '../lib/html.js';
 import { back, go } from '../lib/router.js';
-import { saveItem, updateRoom, setMe, exportRoom, importRoom, forgetRoom, pendingCount, flushAll, pull } from '../lib/store.js';
+import { saveItem, updateRoom, setMe, exportRoom, importRoom, forgetRoom, pendingCount, flushAll, pull, rejectedList } from '../lib/store.js';
 import { downloadFile } from '../lib/share.js';
 import { APP_VERSION } from '../config.js';
 import { useRoom, useOnline } from './hooks.js';
@@ -69,9 +69,10 @@ export function Settings({ roomId }) {
     setMe(roomId, null);
   }
 
-  const syncText = !online || sync.state === 'offline' ? `オフライン${pending ? `・${pending}件あとで送信` : ''}`
+  const rejected = rejectedList(roomId);
+  const syncText =!online || sync.state === 'offline' ? `オフライン${pending ? `・${pending}件あとで送信` : ''}`
     : sync.state === 'error' ? '同期できません（あとで自動で再試行）'
-    : pending ? '送信中…' : sync.lastSync ? '最新です' : '確認中…';
+    : pending ? '送信中…' : sync.lastSync ? (rejected.length ? `最新です（送れなかったもの${rejected.length}件：写真の枚数の上限など）` : '最新です') : '確認中…';
 
   return html`<div class="page no-nav">
     <${TopBar} title="設定" onBack=${() => back(`/r/${roomId}`)} />
@@ -82,7 +83,7 @@ export function Settings({ roomId }) {
         <button class="avatar-btn" aria-label=${`${m.name}のアイコンを大きく見る`} onClick=${() => setViewM(m.id)}><${Avatar} m=${m} size="lg" /></button>
         <button class="grow" style=${{ background: 'none', border: 0, padding: 0, textAlign: 'left' }} onClick=${() => setEditM(m)}>
           <div class="bold">${m.name}${m.id === snap.me ? html` <span class="badge accent">あなた</span>` : null}</div>
-          <div class="tiny muted">${m.placeholder ? 'まだ部屋に入っていません' : m.id === snap.me ? '写真（何枚でも）・名前・色を変える' : 'アイコンをタップで大きく見る'}</div>
+          <div class="tiny muted">${m.placeholder ? 'まだ部屋に入っていません' : m.id === snap.me ? '写真（何枚でも）・名前・色を変える' : verText(m)}</div>
         </button>
         <button class="icon-btn" aria-label="編集" onClick=${() => setEditM(m)}><${Icon} name="edit" size=${18} /></button>
       </div>`)}
@@ -192,6 +193,12 @@ function GrantRow({ m }) {
         : on ? 'ほかの友だちとの部屋をつくれます（その友だちが新しくつくるときは、あなたの承認がいります）' : 'オンにすると、ほかの友だちとの部屋を自分でつくれます'}</div></div>
     <span class=${"switch" + (on ? " on" : "")} style=${{ width: "auto", padding: 0 }} aria-hidden="true"><span class="track"></span></span>
   </button>`;
+}
+
+// 相手がどの版で使っているか（古い版だと新しい機能や同期の直しが届いていない）
+function verText(m) {
+  if (!m.appVersion) return 'まだ前の版（v1.3.1以前）です。アプリを開き直すと新しくなります';
+  return m.appVersion === APP_VERSION ? `最新版（v${m.appVersion}）で使っています` : `v${m.appVersion}で使っています`;
 }
 
 function MemberSheet({ m, onClose, snap }) {
