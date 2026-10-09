@@ -8,7 +8,6 @@ import { useRoom, useToday } from './hooks.js';
 import { Icon } from './icons.js';
 import { TopBar, Cover, toast, copyText, Sparkles, celebrate } from './components.js';
 import { wishEmoji } from './rows.js';
-import { ReviewCard } from './HomeTab.js';
 import { BookPrep } from './BookPage.js';
 
 export function PlanPage({ roomId, id }) {
@@ -52,7 +51,7 @@ export function PlanPage({ roomId, id }) {
       <${Sparkles} kind=${p.bookClub && !todos.length ? 'night' : 'hero'} />
       <div class="dt">${fmtLong(p.date, { year: p.date.slice(0, 4) !== today.slice(0, 4) })}${p.endDate && p.endDate !== p.date ? `〜${fmtDate(p.endDate)}` : ''}${p.time ? `  ${p.time}〜` : ''}</div>
       <h1 class="ttl">${planTitle(p, snap)}</h1>
-      <span class=${'cd' + (cd.n === 0 ? ' today' : '')}>${past ? (p.reviewed ? 'おわった日' : 'おわった日・どうだった？') : cd.text}</span>
+      <span class=${'cd' + (cd.n === 0 ? ' today' : '')}>${past ? 'おわった日' : cd.text}</span>
     </div>
 
     ${p.place ? html`<a class="list-item card" style=${{ marginTop: '12px', padding: '12px 14px' }} href=${mapsUrl(p.place)} target="_blank" rel="noopener noreferrer">
@@ -102,8 +101,6 @@ export function PlanPage({ roomId, id }) {
 
     ${p.memo ? html`<h2 class="section">メモ</h2><div class="card pre" style=${{ lineHeight: 1.8 }}>${p.memo}</div>` : null}
 
-    ${past && !p.reviewed ? html`<h2 class="section">どうだった？</h2>
-      <div class="review-card"><${ReviewCard} snap=${snap} p=${p} embedded=${true} ui=${{ openBookAdd: () => go(`/r/${roomId}/book?add=1`) }} /></div>` : null}
 
     ${!past ? html`<h2 class="section">共有・カレンダーに入れる</h2>
       <div class="share-grid">

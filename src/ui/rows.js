@@ -112,7 +112,6 @@ export function PlanCard({ snap, p, today, showCountdown = true }) {
         ${p.time ? html`<span class="row" style=${{ gap: '3px' }}><${Icon} name="clock" size=${12} />${p.time}</span>` : null}
         ${p.place ? html`<span class="row ellipsis" style=${{ gap: '3px', maxWidth: '100%' }}><${Icon} name="mapPin" size=${12} />${p.place}</span>` : null}
         ${p.bookClub ? html`<span class="badge book">📚 ${book ? `『${book.title}』` : '本は未定'}</span>` : null}
-        ${past && !p.reviewed ? html`<span class="badge accent">どうだった？</span>` : null}
       </div>
     </div>
     ${showCountdown && !past ? html`<span class=${'badge ' + (cd.tone === 'today' ? 'ink' : cd.tone === 'soon' ? 'accent' : '')}>${cd.text}</span>` : null}

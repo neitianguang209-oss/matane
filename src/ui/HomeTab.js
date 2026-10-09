@@ -2,7 +2,7 @@ import { html, React } from '../lib/html.js';
 import { go } from '../lib/router.js';
 import { saveItem, getItem, listRooms } from '../lib/store.js';
 import { fmtLong, fmtDate, countdown, seasonOfDate, seasonById, monthKey, monthOf, parseDate, WD } from '../lib/dates.js';
-import { groupWishes, upcomingPlans, plansToReview, bookQueue, nextPicker, bookClubsInMonth, planForBook, planEnd } from '../lib/logic.js';
+import { groupWishes, upcomingPlans, bookQueue, nextPicker, bookClubsInMonth, planForBook, planEnd } from '../lib/logic.js';
 import { homeIconSrc } from '../lib/homeicon.js';
 import { useToday, usePair } from './hooks.js';
 import { Icon } from './icons.js';
@@ -16,7 +16,6 @@ export function HomeTab({ snap, headerRight, ui }) {
   const today = useToday();
   const { me, other } = usePair(snap);
   const upcoming = upcomingPlans(snap.plans, today);
-  const reviews = plansToReview(snap.plans, today);
   const groups = groupWishes(snap.wishes, { likes: snap.likes, memberCount: snap.members.length, today });
   const season = seasonById(seasonOfDate(today));
   const news = [...snap.wishes, ...snap.books, ...snap.plans, ...snap.memos]
@@ -49,8 +48,6 @@ export function HomeTab({ snap, headerRight, ui }) {
 
     <${NextHero} snap=${snap} upcoming=${upcoming} today=${today} other=${other} />
 
-    ${reviews.length ? html`<h2 class="section">ふりかえり <span class="aside">やったことにチェック</span></h2>
-      ${reviews.slice(0, 2).map((p) => html`<${ReviewCard} key=${p.id} snap=${snap} p=${p} ui=${ui} />`)}` : null}
 
     ${news.length ? html`<h2 class="section">${other?.name ?? '相手'}から届いたもの <span class="badge new">NEW</span></h2>
       <div class="list">
@@ -140,75 +137,6 @@ function NextHero({ snap, upcoming, today, other }) {
       ${second.bookClub ? html`<span class="badge book">📚 読書会</span>` : null}
       <span class="faint" style=${{ marginLeft: 'auto' }}>${countdown(second.date, today).text}</span>
     </button>` : null}
-  </div>`;
-}
-
-// 終わった日の「どうだった？」
-export function ReviewCard({ snap, p, ui, embedded = false }) {
-  const todos = p.todos ?? [];
-  const book = p.bookClub && p.bookId ? snap.bookById.get(p.bookId) : null;
-  const [checked, setChecked] = useState(() => {
-    const s = {};
-    for (const t of todos) s[t.id] = t.done ?? true;
-    if (p.bookClub) s.__book = true;
-    return s;
-  });
-  const flip = (k) => setChecked({ ...checked, [k]: !checked[k] });
-
-  function record(skip = false) {
-    let wishDone = 0;
-    for (const t of todos) {
-      if (!t.wishId) continue;
-      const w = getItem(snap.id, t.wishId);
-      if (!w || w.deleted) continue;
-      if (!skip && checked[t.id] && !w.doneAt) { saveItem(snap.id, { ...w, doneAt: p.date, donePlanId: p.id }); wishDone++; }
-      if ((skip || !checked[t.id]) && w.donePlanId === p.id) saveItem(snap.id, { ...w, doneAt: null, donePlanId: null });
-    }
-    let bookDone = false;
-    if (p.bookClub && book) {
-      if (!skip && checked.__book && !book.doneAt) { saveItem(snap.id, { ...book, doneAt: p.date }); bookDone = true; }
-    }
-    if (!skip && (wishDone || bookDone || todos.some((t) => checked[t.id]))) celebrate();
-    saveItem(snap.id, {
-      ...p,
-      reviewed: true,
-      todos: todos.map((t) => ({ ...t, done: !skip && !!checked[t.id] })),
-      bookClubHeld: p.bookClub ? !skip && !!checked.__book : undefined,
-    });
-    if (bookDone) {
-      const after = bookQueue(snap.books.map((b) => (b.id === book.id ? { ...b, doneAt: p.date } : b)));
-      if (after.queue.length < 2) {
-        const picker = snap.memberById.get(nextPicker(snap.books, snap.members));
-        toast(`おつかれさま！次々回の本を決めよう${picker ? `（${picker.name}の番）` : ''}`, { action: '本を選ぶ', onAction: ui?.openBookAdd, duration: 7000 });
-        return;
-      }
-    }
-    toast(skip ? '記録しないでおきました' : wishDone ? `やったこと ${wishDone}個 を記録したよ` : '記録したよ');
-  }
-
-  const anything = todos.length || p.bookClub;
-  return html`<div class=${embedded ? '' : 'review-card'}>
-    ${embedded ? null : html`<div class="row between">
-      <div class="round bold" style=${{ fontSize: '16px' }}>${fmtDate(p.date)}、どうだった？</div>
-      <button class="link-btn" onClick=${() => go(`/r/${snap.id}/p/${p.id}`)}>ひらく</button>
-    </div>`}
-    ${anything ? html`<div style=${{ marginTop: '6px' }}>
-      ${p.bookClub ? html`<button class=${'check-row' + (checked.__book ? ' on' : '')} onClick=${() => flip('__book')} aria-pressed=${!!checked.__book}>
-        <span class="box"><${Icon} name="check" stroke=${3} /></span>
-        <span class="label-t grow">📚 読書会${book ? `『${book.title}』` : ''}をやった</span>
-      </button>` : null}
-      ${todos.map((t) => {
-        const w = t.wishId ? snap.wishById.get(t.wishId) : null;
-        return html`<button key=${t.id} class=${'check-row' + (checked[t.id] ? ' on' : '')} onClick=${() => flip(t.id)} aria-pressed=${!!checked[t.id]}>
-          <span class="box"><${Icon} name="check" stroke=${3} /></span>
-          <span class="label-t grow">${w ? wishEmoji(w) + ' ' : ''}${w?.title ?? t.text}</span>
-        </button>`;
-      })}
-    </div>` : html`<div class="small muted" style=${{ margin: '6px 0' }}>この日の「やること」は入っていませんでした。</div>`}
-    <div class="row" style=${{ marginTop: '10px' }}>
-      <button class="btn small ghost" onClick=${() => record(true)}>記録しない</button>
-      <button class="btn small primary grow" onClick=${() => record(false)}><${Icon} name="check" />${anything ? 'チェックしたものを記録' : 'OK'}</button>
-    </div>
   </div>`;
 }
 
