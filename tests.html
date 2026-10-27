@@ -114,6 +114,28 @@
       const q = L.bookQueue(books);
       eq([q.next.id, q.afterNext.id, q.no.get('b1'), q.no.get('b2'), q.no.get('b3')], ['b2', 'b3', 1, 2, 3]);
     });
+    t('bookClubsInMonth 同じ日・同じ本の重複は1回', () => {
+      const ps = [P('d1', '2026-10-17', { bookClub: true, bookId: 'b2' }), P('d2', '2026-10-17', { bookClub: true, bookId: 'b2' }), P('d3', '2026-10-17', { bookClub: true })];
+      eq(L.bookClubsInMonth(ps, '2026-10').map((p) => p.id), ['d1', 'd3']);
+    });
+    t('withAutoDone 会の日が過ぎたら語り終えた本に', () => {
+      const ps = [P('c1', '2026-10-01', { bookClub: true, bookId: 'b2' })];
+      const out = L.withAutoDone(books, ps, today);
+      eq([out[1].doneAt, out[1]._autoDone, out[2].doneAt ?? null, L.bookQueue(out).next.id], ['2026-10-01', true, null, 'b3']);
+    });
+    t('withAutoDone 当日とこれからの日があるときはまだ', () => {
+      const ps = [P('c1', today, { bookClub: true, bookId: 'b2' }), P('c0', '2026-09-01', { bookClub: true, bookId: 'b3' }), P('c2', '2026-12-01', { bookClub: true, bookId: 'b3' })];
+      const out = L.withAutoDone(books, ps, today);
+      eq([out[1].doneAt ?? null, out[2].doneAt ?? null], [null, null]);
+    });
+    t('withAutoDone 「まだ語っていない」に戻した後は古い会を数えない', () => {
+      const bs = [{ id: 'x', order: 1, reopenedAt: '2026-10-02' }];
+      eq(L.withAutoDone(bs, [P('c1', '2026-10-01', { bookClub: true, bookId: 'x' })], today)[0].doneAt ?? null, null);
+    });
+    t('withAutoDone 押した日はそのまま', () => {
+      const out = L.withAutoDone(books, [P('c1', '2026-09-01', { bookClub: true, bookId: 'b1' })], today);
+      eq([out[0].doneAt, out[0]._autoDone ?? false], ['2026-09-20', false]);
+    });
     t('nextPicker 交代制', () => eq(L.nextPicker(books, members), 'B'));
     t('nextPicker 本が無ければ未定', () => eq(L.nextPicker([], members), null));
     t('bookForNewClub 割り当て済みは飛ばす', () => {

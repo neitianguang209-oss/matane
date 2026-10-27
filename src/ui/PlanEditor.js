@@ -72,6 +72,15 @@ export function PlanEditor({ roomId, id, query }) {
     if (!ok) return;
     const pendingText = text.trim();
     const todos = pendingText ? [...p.todos, { id: newId('t'), text: pendingText, wishId: null }] : p.todos;
+    // 同じ日・同じ本の読書会がもうあるなら、新しく作らずにそちらを開く（二重登録を防ぐ）
+    if (!orig && p.bookClub && p.bookId) {
+      const same = snap.plans.find((x) => x.bookClub && x.bookId === p.bookId && x.date === p.date);
+      if (same) {
+        toast(`${fmtDate(same.date)}の読書会はもう入っているよ`);
+        go(`/r/${roomId}/p/${same.id}`, { replace: true });
+        return;
+      }
+    }
     const saved = saveItem(roomId, {
       ...(orig ?? {}),
       kind: 'plan',

@@ -73,9 +73,15 @@ export function pastPlans(plans, today = todayStr()) {
 export function plansToReview(plans, today = todayStr()) {
   return pastPlans(plans, today).filter((p) => !p.reviewed && diffDays(planEnd(p), today) <= 60);
 }
-// 今月の読書会（予定も含む）
+// 今月の読書会（予定も含む）。同じ日・同じ本の重複は1回と数える
 export function bookClubsInMonth(plans, month /* 'YYYY-MM' */) {
-  return plans.filter((p) => p.bookClub && monthKey(p.date) === month).sort(byDate);
+  const seen = new Set();
+  return plans.filter((p) => p.bookClub && monthKey(p.date) === month).sort(byDate).filter((p) => {
+    const k = p.bookId ? `${p.date}|${p.bookId}` : p.id;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 // やりたいことが入っている、これからの日
 export function plansWithWish(plans, wishId, today = todayStr()) {
@@ -90,6 +96,25 @@ export function bookQueue(books) {
   const queue = books.filter((b) => !b.doneAt).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const no = new Map([...done, ...queue].map((b, i) => [b.id, i + 1]));   // 第◯回
   return { done, queue, next: queue[0] ?? null, afterNext: queue[1] ?? null, no };
+}
+
+// 読書会の日が過ぎたら、その本は「語り終えた本」に（ボタンを押し忘れても進む）。
+//   これからの日が別にあるとき・「まだ語っていない」に戻した日（reopenedAt）より前の会は数えない。
+//   保存はしない（_autoDone は保存時に捨てられる）。押したときは doneAt がそのまま残る。
+export function withAutoDone(books, plans, today = todayStr()) {
+  const past = new Map();     // bookId -> いちばん最近の終わった会の日
+  const ahead = new Set();
+  for (const p of plans) {
+    if (!p.bookClub || !p.bookId || p.deleted) continue;
+    if (planEnd(p) >= today) ahead.add(p.bookId);
+    else if (!past.has(p.bookId) || past.get(p.bookId) < p.date) past.set(p.bookId, p.date);
+  }
+  return books.map((b) => {
+    if (b.doneAt || ahead.has(b.id) || !past.has(b.id)) return b;
+    const d = past.get(b.id);
+    if (b.reopenedAt && d < b.reopenedAt) return b;
+    return { ...b, doneAt: d, _autoDone: true };
+  });
 }
 
 // 次に本を選ぶ人：いちばん最近追加された本を選んだ人ではないほう（交代制）

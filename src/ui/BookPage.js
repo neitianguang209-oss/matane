@@ -148,7 +148,7 @@ export function BookPage({ roomId, id, query }) {
 
     <div class="stack" style=${{ marginTop: '18px' }}>
       ${b.doneAt
-        ? html`<button class="btn ghost block small" onClick=${() => { saveItem(roomId, { ...b, doneAt: null }); toast('まだ語っていない本に戻したよ'); }}>まだ語っていないことにする</button>`
+        ? html`<button class="btn ghost block small" onClick=${() => { saveItem(roomId, { ...b, doneAt: null, reopenedAt: todayStr() }); toast('まだ語っていない本に戻したよ'); }}>まだ語っていないことにする</button>`
         : html`<button class="btn block" onClick=${finish}><${Icon} name="checkCircle" />読書会おわった！</button>`}
       <button class="btn ghost danger block small" onClick=${remove}><${Icon} name="trash" />この本を消す</button>
     </div>

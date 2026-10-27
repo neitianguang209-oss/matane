@@ -11,6 +11,8 @@ import { rpcPull, rpcPush, supabase } from './api.js';
 import { newRoomId, newId } from './ids.js';
 import { pickPhoto, periodKey, tapRotates } from './photos.js';
 import { currentPass } from './pass.js';
+import { todayStr } from './dates.js';
+import { withAutoDone } from './logic.js';
 
 const K_INDEX = 'index';
 const K_OUTBOX = 'outbox';
@@ -127,7 +129,9 @@ const byOrder = (a, b) => ((a.order ?? 0) - (b.order ?? 0)) || String(a.createdA
 
 export function getRoom(id) {
   if (!id) return null;
-  if (snapCache.has(id)) return snapCache.get(id);
+  const today = todayStr();
+  // 日付が変わったら作り直す（読書会の日が過ぎた本を「語り終えた本」にするため）
+  if (snapCache.has(id) && snapCache.get(id)._day === today) return snapCache.get(id);
   const e = S.rooms.get(id);
   if (!e) return null;
   const live = { member: [], wish: [], plan: [], book: [], note: [], like: [], memo: [], photo: [] };
@@ -142,8 +146,10 @@ export function getRoom(id) {
     const cur = pickPhoto(m, mine, new Date(), S.taps[m.id] ?? 0);
     return { ...m, _photos: mine, _photo: cur?.data ?? m.photo ?? null, _photoId: cur?.id ?? null };
   });
+  const books = withAutoDone(live.book, live.plan, today);
   const snap = {
     id,
+    _day: today,
     room: e.room,
     members,
     memberById: new Map(members.map((m) => [m.id, m])),
@@ -151,8 +157,8 @@ export function getRoom(id) {
     wishById: new Map(live.wish.map((w) => [w.id, w])),
     plans: live.plan,
     planById: new Map(live.plan.map((p) => [p.id, p])),
-    books: live.book,
-    bookById: new Map(live.book.map((b) => [b.id, b])),
+    books,
+    bookById: new Map(books.map((b) => [b.id, b])),
     notes: live.note,
     likes: live.like,
     memos: live.memo.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),

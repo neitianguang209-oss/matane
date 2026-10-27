@@ -23,7 +23,8 @@ export function HomeTab({ snap, headerRight, ui }) {
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
   const year = today.slice(0, 4);
-  const metThisYear = snap.plans.filter((p) => p.date.startsWith(year) && p.date <= today).length;
+  // 同じ日に予定が2つあっても1日と数える
+  const metThisYear = new Set(snap.plans.filter((p) => p.date.startsWith(year) && p.date <= today).map((p) => p.date)).size;
   const doneCount = groups.done.length;
   const booksDone = snap.books.filter((b) => b.doneAt).length;
 
